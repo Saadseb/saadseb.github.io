@@ -4643,161 +4643,136 @@ async function publishToGitHub() {
     document.getElementById('gh-token-status').innerHTML = '<span style="color:#e74c3c">❌ Entrez d\'abord votre token GitHub ci-dessus</span>';
     return;
   }
-  const statusEl = document.getElementById('gh-status');
+  const statusEl    = document.getElementById('gh-status');
   const tokenStatusEl = document.getElementById('gh-token-status');
-  statusEl.textContent = '⏳ Connexion à GitHub...';
+  statusEl.textContent = '⏳ Démarrage...';
   tokenStatusEl.innerHTML = '';
 
+  // Affiche des lignes de debug dans le panneau admin
+  function dbg(lines) {
+    tokenStatusEl.innerHTML = lines.map(l =>
+      `<div style="font-family:monospace;font-size:11px;line-height:1.6;color:#bbb;word-break:break-all">${l}</div>`
+    ).join('');
+  }
+
   try {
-    // 1. Lire le fichier SOURCE sur GitHub
-    const getResp = await fetch(`https://api.github.com/repos/${GH_USER}/${GH_REPO}/contents/${GH_FILE}`, {
-      headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json' }
-    });
+    // ── ÉTAPE 1 : récupérer le SHA sur GitHub (nécessaire pour le PUT) ──
+    statusEl.textContent = '⏳ 1/4 — Lecture SHA GitHub...';
+    dbg(['⏳ Connexion à GitHub pour récupérer le SHA du fichier...']);
+
+    const getResp = await fetch(
+      `https://api.github.com/repos/${GH_USER}/${GH_REPO}/contents/${GH_FILE}`,
+      { headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json' } }
+    );
     if (!getResp.ok) {
-      const err = await getResp.json();
-      throw new Error(err.message || 'Impossible de lire le fichier sur GitHub');
+      const e = await getResp.json();
+      throw new Error(`GitHub ${getResp.status}: ${e.message}`);
     }
     const fileData = await getResp.json();
     const sha = fileData.sha;
+    dbg([`✅ SHA récupéré: ${sha.slice(0,12)}...`, `📄 Taille GitHub (base64): ${(fileData.content||'').length} caractères`]);
 
-    // Décoder le fichier source original depuis GitHub (base64 → texte UTF-8)
-    const b64clean = fileData.content.replace(/\n/g, '');
-    const bytes = Uint8Array.from(atob(b64clean), c => c.charCodeAt(0));
-    let sourceHTML = new TextDecoder('utf-8').decode(bytes);
+    // ── ÉTAPE 2 : lire le HTML SOURCE depuis la page actuelle ──
+    // On ne décode PAS le base64 de GitHub (trop lourd et problématique).
+    // On re-fetch le fichier index.html directement depuis l'origine.
+    statusEl.textContent = '⏳ 2/4 — Lecture du fichier HTML source...';
 
-    statusEl.textContent = '⏳ Injection des données...';
+    let sourceHTML = '';
+    const pageURL = window.location.origin + window.location.pathname;
+    dbg([`✅ SHA: ${sha.slice(0,12)}...`, `⏳ Fetch du fichier source: ${pageURL}`]);
 
-    // 2. Préparer les données actuelles (avec images custom depuis localStorage)
-    // Résoudre les images custom stockées en localStorage pour chaque produit
-    const productsWithImgs = PRODUCTS.map(p => {
+    try {
+      const selfResp = await fetch(pageURL + '?nocache=' + Date.now(), { cache: 'no-store' });
+      if (!selfResp.ok) throw new Error(`HTTP ${selfResp.status}`);
+      sourceHTML = await selfResp.text();
+    } catch(fetchErr) {
+      // Fallback : sérialiser le DOM (moins fiable mais fonctionnel)
+      sourceHTML = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+      dbg([`✅ SHA: ${sha.slice(0,12)}...`, `⚠️ Fetch échoué (${fetchErr.message}) → DOM sérialisé`]);
+    }
+
+    const srcKo = (sourceHTML.length / 1024).toFixed(1);
+    const hasProd = sourceHTML.includes('let PRODUCTS');
+    const hasBlog = sourceHTML.includes('let BLOG_POSTS');
+    const hasNorm = sourceHTML.includes('normalizeProduct');
+
+    dbg([
+      `✅ SHA: ${sha.slice(0,12)}...`,
+      `📦 Fichier source: ${srcKo} Ko`,
+      `🔑 "let PRODUCTS": ${hasProd ? '✅ trouvé' : '❌ ABSENT'}`,
+      `🔑 "let BLOG_POSTS": ${hasBlog ? '✅ trouvé' : '❌ ABSENT'}`,
+      `🔑 "normalizeProduct": ${hasNorm ? '✅ trouvé' : '❌ ABSENT'}`,
+    ]);
+
+    if (!hasProd || !hasBlog) {
+      throw new Error(`Fichier source invalide (${srcKo} Ko). "let PRODUCTS": ${hasProd?'OK':'ABSENT'}, "let BLOG_POSTS": ${hasBlog?'OK':'ABSENT'}. Le fetch de la page a peut-être échoué.`);
+    }
+
+    // ── ÉTAPE 3 : injecter PRODUCTS, BLOG_POSTS, ORDERS ──
+    statusEl.textContent = '⏳ 3/4 — Injection des données...';
+
+    // Préparer les produits avec images custom depuis localStorage
+    const savedProds = JSON.parse(localStorage.getItem('fc_products') || 'null') || PRODUCTS;
+    const productsWithImgs = savedProds.map(p => {
       const custom = localStorage.getItem('fc_img_' + p.id);
-      if (custom) return { ...p, img: custom };
-      return p;
+      return custom ? { ...p, img: custom } : p;
     });
     const productsJSON = JSON.stringify(productsWithImgs);
-    const blogJSON = JSON.stringify(BLOG_POSTS);
 
-    // Paramètres boutique sauvegardés
-    const savedSettings = JSON.parse(localStorage.getItem('fc_settings') || '{}');
+    // Préparer le blog depuis localStorage (contient les images base64 si uploadées)
+    const savedBlog = JSON.parse(localStorage.getItem('fc_blog') || 'null') || BLOG_POSTS;
+    const blogJSON = JSON.stringify(savedBlog);
+
     const savedOrders = localStorage.getItem('fc_orders');
 
     let newHTML = sourceHTML;
-    let prodChanged = false;
-    let blogChanged = false;
+    let prodOK = false, blogOK = false;
 
-    // ═══════════ DEBUG PANEL ═══════════
-    // Affiche un rapport détaillé dans le DOM pour diagnostiquer les problèmes
-    function dbg(lines) {
-      tokenStatusEl.innerHTML = lines.map(l =>
-        `<div style="font-family:monospace;font-size:11px;color:#aaa;margin:1px 0;word-break:break-all">${l}</div>`
-      ).join('');
+    // ── Injection PRODUCTS : chercher "let PRODUCTS" → ".map(normalizeProduct);" ──
+    const MAP_TOKEN = '.map(normalizeProduct);';
+    const prodStart = newHTML.indexOf('let PRODUCTS');
+    const prodEnd   = prodStart !== -1 ? newHTML.indexOf(MAP_TOKEN, prodStart) : -1;
+    if (prodStart !== -1 && prodEnd !== -1) {
+      newHTML = newHTML.slice(0, prodStart)
+              + `let PRODUCTS = (${productsJSON})${MAP_TOKEN}`
+              + newHTML.slice(prodEnd + MAP_TOKEN.length);
+      prodOK = true;
     }
 
-    // Extraire le contexte autour d'un mot-clé (±200 caractères)
-    function ctx(html, keyword) {
-      const idx = html.indexOf(keyword);
-      if (idx === -1) return `"${keyword}" INTROUVABLE dans le fichier`;
-      const start = Math.max(0, idx - 80);
-      const end = Math.min(html.length, idx + keyword.length + 120);
-      return `...${html.slice(start, end).replace(/</g,'&lt;').replace(/>/g,'&gt;')}...`;
-    }
-
-    // ── Rapport initial ──
-    const srcSize = (sourceHTML.length / 1024).toFixed(1);
-    const hasProd  = sourceHTML.includes('let PRODUCTS');
-    const hasBlog  = sourceHTML.includes('let BLOG_POSTS');
-    const hasNorm  = sourceHTML.includes('normalizeProduct');
-    const hasMap   = sourceHTML.includes('.map(normalizeProduct)');
-
-    statusEl.textContent = '🔍 Analyse du fichier GitHub...';
-    dbg([
-      `📦 Fichier GitHub: ${srcSize} Ko`,
-      `🔑 "let PRODUCTS" présent: ${hasProd ? '✅ OUI' : '❌ NON'}`,
-      `🔑 "let BLOG_POSTS" présent: ${hasBlog ? '✅ OUI' : '❌ NON'}`,
-      `🔑 "normalizeProduct" présent: ${hasNorm ? '✅ OUI' : '❌ NON'}`,
-      `🔑 ".map(normalizeProduct)" présent: ${hasMap ? '✅ OUI' : '❌ NON'}`,
-      hasProd ? `📍 Contexte PRODUCTS: ${ctx(sourceHTML, 'let PRODUCTS')}` : '⚠️ PRODUCTS manquant !',
-      hasBlog ? `📍 Contexte BLOG: ${ctx(sourceHTML, 'let BLOG_POSTS')}` : '⚠️ BLOG_POSTS manquant !',
-    ]);
-
-    // Petit délai pour que le debug s'affiche avant la suite
-    await new Promise(r => setTimeout(r, 800));
-
-    // ── Remplacement PRODUCTS ──
-    // Stratégie : chercher "let PRODUCTS" puis ".map(normalizeProduct);" et remplacer tout le bloc
-    const prodStartIdx = newHTML.indexOf('let PRODUCTS');
-    const mapToken = '.map(normalizeProduct);';
-    const prodEndIdx = prodStartIdx !== -1 ? newHTML.indexOf(mapToken, prodStartIdx) : -1;
-
-    if (prodStartIdx !== -1 && prodEndIdx !== -1) {
-      const before = newHTML.slice(0, prodStartIdx);
-      const after  = newHTML.slice(prodEndIdx + mapToken.length);
-      newHTML = before + `let PRODUCTS = (${productsJSON})${mapToken}` + after;
-      prodChanged = true;
-    }
-
-    // ── Remplacement BLOG_POSTS ──
-    // Chercher "let BLOG_POSTS" jusqu'au prochain ";" après le dernier "]"
-    const blogStartIdx = newHTML.indexOf('let BLOG_POSTS');
-    if (blogStartIdx !== -1) {
-      // Trouver la fin du bloc : chercher "];" ou "] ;" après blogStartIdx
-      // On cherche le premier ";" après le dernier "]" dans le bloc blog
-      // Approche robuste : trouver "let ORDERS" ou "// Ads config" qui vient après
-      const blogEndMarkers = ['let ORDERS', '// Ads config', 'const ADS_DEFAULTS', 'const ADMIN_PWD_KEY'];
-      let blogEndIdx = -1;
-      for (const marker of blogEndMarkers) {
-        const idx = newHTML.indexOf(marker, blogStartIdx + 100);
-        if (idx !== -1) { blogEndIdx = idx; break; }
+    // ── Injection BLOG_POSTS : chercher "let BLOG_POSTS" → prochain marqueur connu ──
+    const BLOG_MARKERS = ['let ORDERS', '// Ads config', 'const ADS_DEFAULTS', 'const ADMIN_PWD_KEY'];
+    const blogStart = newHTML.indexOf('let BLOG_POSTS');
+    if (blogStart !== -1) {
+      let blogEnd = -1;
+      for (const m of BLOG_MARKERS) {
+        const idx = newHTML.indexOf(m, blogStart + 50);
+        if (idx !== -1) { blogEnd = idx; break; }
       }
-      if (blogEndIdx !== -1) {
-        const blogBlock = newHTML.slice(blogStartIdx, blogEndIdx);
-        // Le bloc doit se terminer par "];" ou "] ;" — on coupe juste avant blogEndIdx
-        // Trouver le dernier ";" dans le bloc
-        const lastSemi = blogBlock.lastIndexOf(';');
+      if (blogEnd !== -1) {
+        const blogBlock   = newHTML.slice(blogStart, blogEnd);
+        const lastSemi    = blogBlock.lastIndexOf(';');
         if (lastSemi !== -1) {
-          const before = newHTML.slice(0, blogStartIdx);
-          const after  = newHTML.slice(blogStartIdx + lastSemi + 1);
-          newHTML = before + `let BLOG_POSTS = ${blogJSON};` + after;
-          blogChanged = true;
+          newHTML = newHTML.slice(0, blogStart)
+                  + `let BLOG_POSTS = ${blogJSON};`
+                  + newHTML.slice(blogStart + lastSemi + 1);
+          blogOK = true;
         }
       }
     }
 
-    // ── Rapport après injection ──
-    const debugLines = [
-      `📦 Fichier source: ${srcSize} Ko`,
-      `🔄 PRODUCTS injecté: ${prodChanged ? '✅ OUI' : '❌ ÉCHEC'} (trouvé à pos ${prodStartIdx}, fin à ${prodEndIdx})`,
-      `🔄 BLOG injecté: ${blogChanged ? '✅ OUI' : '❌ ÉCHEC'} (trouvé à pos ${blogStartIdx})`,
-    ];
-
-    if (!prodChanged) {
-      debugLines.push(`❌ RAISON PRODUCTS: "let PRODUCTS" idx=${prodStartIdx}, ".map(normalizeProduct);" idx=${prodEndIdx}`);
-      debugLines.push(`📍 Contexte: ${ctx(sourceHTML, 'PRODUCTS')}`);
-    }
-    if (!blogChanged) {
-      debugLines.push(`❌ RAISON BLOG: "let BLOG_POSTS" idx=${blogStartIdx}`);
-      debugLines.push(`📍 Contexte: ${ctx(sourceHTML, 'BLOG_POSTS')}`);
-    }
-
-    dbg(debugLines);
-    await new Promise(r => setTimeout(r, 600));
-
-    if (!prodChanged && !blogChanged) {
-      throw new Error(`Injection impossible — voir le rapport de debug ci-dessus. "let PRODUCTS" ${hasProd?'trouvé':'ABSENT'}, "let BLOG_POSTS" ${hasBlog?'trouvé':'ABSENT'}, ".map(normalizeProduct)" ${hasMap?'trouvé':'ABSENT'}`);
-    }
-
-    // ── Injection des commandes (ORDERS) si modifiées ──
+    // ── Injection ORDERS (optionnel) ──
     if (savedOrders) {
-      const ordStartIdx = newHTML.indexOf('let ORDERS');
-      if (ordStartIdx !== -1) {
-        const ordEndMarkers = ['// Ads config', 'const ADS_DEFAULTS', 'const ADMIN_PWD_KEY'];
-        for (const marker of ordEndMarkers) {
-          const idx = newHTML.indexOf(marker, ordStartIdx + 50);
+      const ordStart = newHTML.indexOf('let ORDERS');
+      if (ordStart !== -1) {
+        for (const m of ['// Ads config', 'const ADS_DEFAULTS', 'const ADMIN_PWD_KEY']) {
+          const idx = newHTML.indexOf(m, ordStart + 50);
           if (idx !== -1) {
-            const ordBlock = newHTML.slice(ordStartIdx, idx);
-            const lastSemi = ordBlock.lastIndexOf(';');
-            if (lastSemi !== -1) {
-              newHTML = newHTML.slice(0, ordStartIdx) + `let ORDERS = ${savedOrders};` + newHTML.slice(ordStartIdx + lastSemi + 1);
+            const block = newHTML.slice(ordStart, idx);
+            const ls    = block.lastIndexOf(';');
+            if (ls !== -1) {
+              newHTML = newHTML.slice(0, ordStart)
+                      + `let ORDERS = ${savedOrders};`
+                      + newHTML.slice(ordStart + ls + 1);
             }
             break;
           }
@@ -4805,63 +4780,75 @@ async function publishToGitHub() {
       }
     }
 
-    // 3. Encoder en base64 (UTF-8 safe)
-    statusEl.textContent = '⏳ Encodage en base64...';
-    const encBytes = new TextEncoder().encode(newHTML);
-    const fileSizeMB = (encBytes.length / 1024 / 1024).toFixed(2);
-    dbg([...debugLines, `📤 Taille finale à envoyer: ${fileSizeMB} Mo`]);
+    dbg([
+      `✅ SHA: ${sha.slice(0,12)}...`,
+      `📦 Source: ${srcKo} Ko`,
+      `🛍 PRODUCTS injecté: ${prodOK ? '✅ OUI' : '❌ ÉCHEC'} (${productsWithImgs.length} produits)`,
+      `📝 BLOG injecté: ${blogOK ? '✅ OUI' : '❌ ÉCHEC'} (${savedBlog.length} articles)`,
+    ]);
 
-    if (encBytes.length > 50 * 1024 * 1024) {
-      throw new Error(`Fichier trop grand (${fileSizeMB} Mo). Utilisez des URL externes pour certaines images.`);
+    if (!prodOK && !blogOK) {
+      throw new Error(`Injection échouée — PRODUCTS: ${prodOK?'OK':'ÉCHEC'}, BLOG: ${blogOK?'OK':'ÉCHEC'}. Source: ${srcKo} Ko.`);
     }
 
+    // ── ÉTAPE 4 : encoder et pousser sur GitHub ──
+    statusEl.textContent = '⏳ 4/4 — Encodage et publication...';
+
+    const encBytes  = new TextEncoder().encode(newHTML);
+    const sizeMB    = (encBytes.length / 1024 / 1024).toFixed(2);
+
+    if (encBytes.length > 50 * 1024 * 1024) {
+      throw new Error(`Fichier trop grand (${sizeMB} Mo). Utilisez des URL externes pour les images.`);
+    }
+
+    // Encoder en base64 par chunks
     let binary = '';
-    const chunkSize = 8192;
-    for (let i = 0; i < encBytes.length; i += chunkSize) {
-      binary += String.fromCharCode(...encBytes.slice(i, i + chunkSize));
+    const CHUNK = 8192;
+    for (let i = 0; i < encBytes.length; i += CHUNK) {
+      binary += String.fromCharCode(...encBytes.slice(i, i + CHUNK));
     }
     const encoded = btoa(binary);
 
-    statusEl.textContent = `⏳ Publication sur GitHub (${fileSizeMB} Mo)...`;
+    dbg([
+      `✅ SHA: ${sha.slice(0,12)}...`,
+      `📦 Source: ${srcKo} Ko`,
+      `🛍 PRODUCTS: ${prodOK?'✅':'❌'} | 📝 BLOG: ${blogOK?'✅':'❌'}`,
+      `📤 Envoi vers GitHub: ${sizeMB} Mo...`,
+    ]);
 
-    // 4. Push vers GitHub
-    const putResp = await fetch(`https://api.github.com/repos/${GH_USER}/${GH_REPO}/contents/${GH_FILE}`, {
-      method: 'PUT',
-      headers: {
-        'Authorization': `token ${token}`,
-        'Accept': 'application/vnd.github.v3+json',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        message: `FaizaCaftan admin update — ${new Date().toLocaleString('fr-FR')}`,
-        content: encoded,
-        sha: sha
-      })
-    });
+    const putResp = await fetch(
+      `https://api.github.com/repos/${GH_USER}/${GH_REPO}/contents/${GH_FILE}`,
+      {
+        method: 'PUT',
+        headers: {
+          'Authorization': `token ${token}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          message: `FaizaCaftan update — ${new Date().toLocaleString('fr-FR')}`,
+          content: encoded,
+          sha: sha
+        })
+      }
+    );
 
     if (!putResp.ok) {
-      const errData = await putResp.json();
-      throw new Error(`GitHub API ${putResp.status}: ${errData.message || 'Erreur inconnue'}`);
+      const e = await putResp.json();
+      throw new Error(`GitHub PUT ${putResp.status}: ${e.message || 'Erreur inconnue'}`);
     }
 
-    // 5. Succès
+    // ── Succès ──
     document.getElementById('adminModal').classList.add('open');
     showAdmTab('settings', document.querySelector('.adm-nav-item:last-child'));
-
     statusEl.innerHTML = '<span style="color:#27ae60">✅ Publié !</span>';
-    tokenStatusEl.innerHTML = `<span style="color:#27ae60">🎉 Publié (${fileSizeMB} Mo) — ${productsWithImgs.length} produits · ${blogWithImgs.length} articles. Visible dans ~1 minute.</span>`;
-    showSaveBanner('GitHub', `🚀 Boutique publiée (${fileSizeMB} Mo) — visible dans 1 minute`);
+    tokenStatusEl.innerHTML = `<span style="color:#27ae60">🎉 Boutique publiée (${sizeMB} Mo) — ${productsWithImgs.length} produits · ${savedBlog.length} articles. Visible dans ~1 minute.</span>`;
+    showSaveBanner('GitHub', `🚀 Boutique publiée (${sizeMB} Mo) — visible dans 1 minute`);
 
   } catch (err) {
     document.getElementById('adminModal').classList.add('open');
     statusEl.innerHTML = '<span style="color:#e74c3c">❌ Erreur</span>';
-    // Ne pas écraser le debug déjà affiché si c'est l'erreur d'injection
-    if (!err.message.includes('Injection impossible')) {
-      tokenStatusEl.innerHTML = `<span style="color:#e74c3c">❌ ${err.message}</span>`;
-    } else {
-      // Ajouter l'erreur sous le debug existant
-      tokenStatusEl.innerHTML += `<div style="color:#e74c3c;margin-top:6px;font-size:12px">❌ ${err.message}</div>`;
-    }
+    tokenStatusEl.innerHTML += `<div style="color:#e74c3c;margin-top:6px;font-size:12px;font-family:monospace">❌ ${err.message}</div>`;
   }
 }
 
