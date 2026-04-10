@@ -4637,6 +4637,33 @@ function saveGhToken() {
   document.getElementById('gh-status').textContent = '🔑 Token prêt';
 }
 
+// ── Utilitaire : taille approximative en octets d'une chaîne UTF-8 ──
+function _byteSize(str) {
+  return new TextEncoder().encode(str).length;
+}
+
+// ── Utilitaire : compresse une base64 image à une qualité encore plus basse si trop grande ──
+async function _shrinkBase64IfNeeded(src, maxBytes) {
+  if (!src || !src.startsWith('data:image')) return src;
+  if (_byteSize(src) <= maxBytes) return src;
+  // Recompresser à 0.45 pour réduire davantage
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      // Réduire aussi les dimensions à 600x750 max
+      let w = img.width, h = img.height;
+      const ratio = Math.min(600 / w, 750 / h);
+      if(ratio < 1) { w = Math.round(w*ratio); h = Math.round(h*ratio); }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', 0.45));
+    };
+    img.onerror = () => resolve(src);
+    img.src = src;
+  });
+}
+
 async function publishToGitHub() {
   const token = localStorage.getItem(GH_TOKEN_KEY);
   if (!token) {
@@ -4665,17 +4692,51 @@ async function publishToGitHub() {
     const bytes = Uint8Array.from(atob(b64clean), c => c.charCodeAt(0));
     let sourceHTML = new TextDecoder('utf-8').decode(bytes);
 
-    statusEl.textContent = '⏳ Injection des données...';
+    statusEl.textContent = '⏳ Optimisation des images...';
 
-    // 2. Préparer les données actuelles (avec images custom depuis localStorage)
-    // Résoudre les images custom stockées en localStorage pour chaque produit
-    const productsWithImgs = PRODUCTS.map(p => {
-      const custom = localStorage.getItem('fc_img_' + p.id);
-      if (custom) return { ...p, img: custom };
-      return p;
-    });
+    // ── Limite par image base64 : ~200 Ko encodé (≈ 150 Ko réels) ──
+    const IMG_MAX_BYTES = 200 * 1024;
+
+    // 2. Préparer les PRODUITS avec toutes les images à jour
+    // Sources prioritaires (du plus récent au plus ancien) :
+    //   a) PRODUCTS en mémoire (déjà mis à jour si admin form sauvegardé)
+    //   b) localStorage fc_products (sauvegarde complète)
+    //   c) localStorage fc_img_<id> (image unique par id)
+    const savedProducts = JSON.parse(localStorage.getItem('fc_products') || 'null') || PRODUCTS;
+
+    const productsWithImgs = await Promise.all(savedProducts.map(async p => {
+      // Image principale : priorité à l'image déjà dans savedProducts (inclut base64 si sauvegardé)
+      let mainImg = p.img;
+      // Fallback vers fc_img_<id> si présent et plus récent
+      const customImg = localStorage.getItem('fc_img_' + p.id);
+      if (customImg) mainImg = customImg;
+      // Compresser encore si trop grande
+      mainImg = await _shrinkBase64IfNeeded(mainImg, IMG_MAX_BYTES);
+
+      // Images galerie
+      let images = p.images && p.images.length > 0 ? p.images : [mainImg];
+      images = await Promise.all(images.map(src => _shrinkBase64IfNeeded(src, IMG_MAX_BYTES)));
+      // S'assurer que la première image galerie = image principale
+      if (images[0] !== mainImg) images[0] = mainImg;
+
+      return { ...p, img: mainImg, images };
+    }));
+
+    // 3. Préparer les ARTICLES BLOG avec images à jour
+    const savedBlog = JSON.parse(localStorage.getItem('fc_blog') || 'null') || BLOG_POSTS;
+    const blogWithImgs = await Promise.all(savedBlog.map(async post => {
+      let img = post.img;
+      img = await _shrinkBase64IfNeeded(img, IMG_MAX_BYTES);
+      return { ...post, img };
+    }));
+
     const productsJSON = JSON.stringify(productsWithImgs);
-    const blogJSON = JSON.stringify(BLOG_POSTS);
+    const blogJSON = JSON.stringify(blogWithImgs);
+
+    // Compter les images base64 injectées pour info
+    const nbImgProd = productsWithImgs.reduce((n, p) => n + ((p.img && p.img.startsWith('data:')) ? 1 : 0) + (p.images||[]).filter(s=>s&&s.startsWith('data:')).length, 0);
+    const nbImgBlog = blogWithImgs.filter(b => b.img && b.img.startsWith('data:')).length;
+    statusEl.textContent = `⏳ Injection — ${productsWithImgs.length} produits · ${blogWithImgs.length} articles · ${nbImgProd + nbImgBlog} images embarquées...`;
 
     // Paramètres boutique sauvegardés
     const savedSettings = JSON.parse(localStorage.getItem('fc_settings') || '{}');
@@ -4730,6 +4791,14 @@ async function publishToGitHub() {
 
     // 3. Encoder en base64 (UTF-8 safe)
     const encBytes = new TextEncoder().encode(newHTML);
+
+    // ── Vérification taille : l'API GitHub accepte max ~100 Mo, mais ~50 Mo pratiquement ──
+    const fileSizeMB = (encBytes.length / 1024 / 1024).toFixed(2);
+    if (encBytes.length > 50 * 1024 * 1024) {
+      throw new Error(`Fichier trop grand (${fileSizeMB} Mo). Utilisez des URL externes plutôt que des images locales pour certains produits.`);
+    }
+    statusEl.textContent = `⏳ Encodage (${fileSizeMB} Mo)...`;
+
     // Encodage base64 par chunks pour éviter les erreurs sur les gros fichiers
     let binary = '';
     const chunkSize = 8192;
@@ -4738,7 +4807,7 @@ async function publishToGitHub() {
     }
     const encoded = btoa(binary);
 
-    statusEl.textContent = '⏳ Publication sur GitHub...';
+    statusEl.textContent = `⏳ Publication sur GitHub (${fileSizeMB} Mo)...`;
 
     // 4. Push vers GitHub
     const putResp = await fetch(`https://api.github.com/repos/${GH_USER}/${GH_REPO}/contents/${GH_FILE}`, {
@@ -4765,8 +4834,8 @@ async function publishToGitHub() {
     showAdmTab('settings', document.querySelector('.adm-nav-item:last-child'));
 
     statusEl.innerHTML = '<span style="color:#27ae60">✅ Publié !</span>';
-    tokenStatusEl.innerHTML = `<span style="color:#27ae60">🎉 Boutique publiée ! Les visiteurs voient la boutique dans ~1 minute.</span>`;
-    showSaveBanner('GitHub', '🚀 Boutique publiée — visible par tous dans 1 minute');
+    tokenStatusEl.innerHTML = `<span style="color:#27ae60">🎉 Boutique publiée (${fileSizeMB} Mo) — ${productsWithImgs.length} produits · ${blogWithImgs.length} articles · ${nbImgProd + nbImgBlog} images embarquées. Visible dans ~1 minute.</span>`;
+    showSaveBanner('GitHub', `🚀 Boutique publiée (${fileSizeMB} Mo) — visible par tous dans 1 minute`);
 
   } catch (err) {
     // Rouvrir l'admin même en cas d'erreur
