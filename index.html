@@ -4637,33 +4637,6 @@ function saveGhToken() {
   document.getElementById('gh-status').textContent = '🔑 Token prêt';
 }
 
-// ── Utilitaire : taille approximative en octets d'une chaîne UTF-8 ──
-function _byteSize(str) {
-  return new TextEncoder().encode(str).length;
-}
-
-// ── Utilitaire : compresse une base64 image à une qualité encore plus basse si trop grande ──
-async function _shrinkBase64IfNeeded(src, maxBytes) {
-  if (!src || !src.startsWith('data:image')) return src;
-  if (_byteSize(src) <= maxBytes) return src;
-  // Recompresser à 0.45 pour réduire davantage
-  return new Promise(resolve => {
-    const img = new Image();
-    img.onload = () => {
-      // Réduire aussi les dimensions à 600x750 max
-      let w = img.width, h = img.height;
-      const ratio = Math.min(600 / w, 750 / h);
-      if(ratio < 1) { w = Math.round(w*ratio); h = Math.round(h*ratio); }
-      const canvas = document.createElement('canvas');
-      canvas.width = w; canvas.height = h;
-      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-      resolve(canvas.toDataURL('image/jpeg', 0.45));
-    };
-    img.onerror = () => resolve(src);
-    img.src = src;
-  });
-}
-
 async function publishToGitHub() {
   const token = localStorage.getItem(GH_TOKEN_KEY);
   if (!token) {
@@ -4692,114 +4665,156 @@ async function publishToGitHub() {
     const bytes = Uint8Array.from(atob(b64clean), c => c.charCodeAt(0));
     let sourceHTML = new TextDecoder('utf-8').decode(bytes);
 
-    statusEl.textContent = '⏳ Optimisation des images...';
+    statusEl.textContent = '⏳ Injection des données...';
 
-    // ── Limite par image base64 : ~200 Ko encodé (≈ 150 Ko réels) ──
-    const IMG_MAX_BYTES = 200 * 1024;
-
-    // 2. Préparer les PRODUITS avec toutes les images à jour
-    // Sources prioritaires (du plus récent au plus ancien) :
-    //   a) PRODUCTS en mémoire (déjà mis à jour si admin form sauvegardé)
-    //   b) localStorage fc_products (sauvegarde complète)
-    //   c) localStorage fc_img_<id> (image unique par id)
-    const savedProducts = JSON.parse(localStorage.getItem('fc_products') || 'null') || PRODUCTS;
-
-    const productsWithImgs = await Promise.all(savedProducts.map(async p => {
-      // Image principale : priorité à l'image déjà dans savedProducts (inclut base64 si sauvegardé)
-      let mainImg = p.img;
-      // Fallback vers fc_img_<id> si présent et plus récent
-      const customImg = localStorage.getItem('fc_img_' + p.id);
-      if (customImg) mainImg = customImg;
-      // Compresser encore si trop grande
-      mainImg = await _shrinkBase64IfNeeded(mainImg, IMG_MAX_BYTES);
-
-      // Images galerie
-      let images = p.images && p.images.length > 0 ? p.images : [mainImg];
-      images = await Promise.all(images.map(src => _shrinkBase64IfNeeded(src, IMG_MAX_BYTES)));
-      // S'assurer que la première image galerie = image principale
-      if (images[0] !== mainImg) images[0] = mainImg;
-
-      return { ...p, img: mainImg, images };
-    }));
-
-    // 3. Préparer les ARTICLES BLOG avec images à jour
-    const savedBlog = JSON.parse(localStorage.getItem('fc_blog') || 'null') || BLOG_POSTS;
-    const blogWithImgs = await Promise.all(savedBlog.map(async post => {
-      let img = post.img;
-      img = await _shrinkBase64IfNeeded(img, IMG_MAX_BYTES);
-      return { ...post, img };
-    }));
-
+    // 2. Préparer les données actuelles (avec images custom depuis localStorage)
+    // Résoudre les images custom stockées en localStorage pour chaque produit
+    const productsWithImgs = PRODUCTS.map(p => {
+      const custom = localStorage.getItem('fc_img_' + p.id);
+      if (custom) return { ...p, img: custom };
+      return p;
+    });
     const productsJSON = JSON.stringify(productsWithImgs);
-    const blogJSON = JSON.stringify(blogWithImgs);
-
-    // Compter les images base64 injectées pour info
-    const nbImgProd = productsWithImgs.reduce((n, p) => n + ((p.img && p.img.startsWith('data:')) ? 1 : 0) + (p.images||[]).filter(s=>s&&s.startsWith('data:')).length, 0);
-    const nbImgBlog = blogWithImgs.filter(b => b.img && b.img.startsWith('data:')).length;
-    statusEl.textContent = `⏳ Injection — ${productsWithImgs.length} produits · ${blogWithImgs.length} articles · ${nbImgProd + nbImgBlog} images embarquées...`;
+    const blogJSON = JSON.stringify(BLOG_POSTS);
 
     // Paramètres boutique sauvegardés
     const savedSettings = JSON.parse(localStorage.getItem('fc_settings') || '{}');
     const savedOrders = localStorage.getItem('fc_orders');
 
     let newHTML = sourceHTML;
-    let changed = false;
+    let prodChanged = false;
+    let blogChanged = false;
+
+    // ═══════════ DEBUG PANEL ═══════════
+    // Affiche un rapport détaillé dans le DOM pour diagnostiquer les problèmes
+    function dbg(lines) {
+      tokenStatusEl.innerHTML = lines.map(l =>
+        `<div style="font-family:monospace;font-size:11px;color:#aaa;margin:1px 0;word-break:break-all">${l}</div>`
+      ).join('');
+    }
+
+    // Extraire le contexte autour d'un mot-clé (±200 caractères)
+    function ctx(html, keyword) {
+      const idx = html.indexOf(keyword);
+      if (idx === -1) return `"${keyword}" INTROUVABLE dans le fichier`;
+      const start = Math.max(0, idx - 80);
+      const end = Math.min(html.length, idx + keyword.length + 120);
+      return `...${html.slice(start, end).replace(/</g,'&lt;').replace(/>/g,'&gt;')}...`;
+    }
+
+    // ── Rapport initial ──
+    const srcSize = (sourceHTML.length / 1024).toFixed(1);
+    const hasProd  = sourceHTML.includes('let PRODUCTS');
+    const hasBlog  = sourceHTML.includes('let BLOG_POSTS');
+    const hasNorm  = sourceHTML.includes('normalizeProduct');
+    const hasMap   = sourceHTML.includes('.map(normalizeProduct)');
+
+    statusEl.textContent = '🔍 Analyse du fichier GitHub...';
+    dbg([
+      `📦 Fichier GitHub: ${srcSize} Ko`,
+      `🔑 "let PRODUCTS" présent: ${hasProd ? '✅ OUI' : '❌ NON'}`,
+      `🔑 "let BLOG_POSTS" présent: ${hasBlog ? '✅ OUI' : '❌ NON'}`,
+      `🔑 "normalizeProduct" présent: ${hasNorm ? '✅ OUI' : '❌ NON'}`,
+      `🔑 ".map(normalizeProduct)" présent: ${hasMap ? '✅ OUI' : '❌ NON'}`,
+      hasProd ? `📍 Contexte PRODUCTS: ${ctx(sourceHTML, 'let PRODUCTS')}` : '⚠️ PRODUCTS manquant !',
+      hasBlog ? `📍 Contexte BLOG: ${ctx(sourceHTML, 'let BLOG_POSTS')}` : '⚠️ BLOG_POSTS manquant !',
+    ]);
+
+    // Petit délai pour que le debug s'affiche avant la suite
+    await new Promise(r => setTimeout(r, 800));
 
     // ── Remplacement PRODUCTS ──
-    // Pattern large qui couvre toutes les variantes possibles :
-    // "let PRODUCTS = (...).map(normalizeProduct);"
-    // "let PRODUCTS = (JSON.parse(...)|| [...]).map(normalizeProduct);"
-    const prodPatterns = [
-      /let PRODUCTS = \(JSON\.parse\(localStorage\.getItem\('fc_products'\)[^)]*\)\s*\|\|\s*\[[\s\S]*?\]\s*\)\.map\(normalizeProduct\);/,
-      /let PRODUCTS = \([\s\S]*?\]\s*\)\.map\(normalizeProduct\);/,
-      /let PRODUCTS = \[[\s\S]*?\]\.map\(normalizeProduct\);/,
-    ];
-    for (const pat of prodPatterns) {
-      if (pat.test(newHTML)) {
-        newHTML = newHTML.replace(pat, `let PRODUCTS = (${productsJSON}).map(normalizeProduct);`);
-        changed = true;
-        break;
-      }
+    // Stratégie : chercher "let PRODUCTS" puis ".map(normalizeProduct);" et remplacer tout le bloc
+    const prodStartIdx = newHTML.indexOf('let PRODUCTS');
+    const mapToken = '.map(normalizeProduct);';
+    const prodEndIdx = prodStartIdx !== -1 ? newHTML.indexOf(mapToken, prodStartIdx) : -1;
+
+    if (prodStartIdx !== -1 && prodEndIdx !== -1) {
+      const before = newHTML.slice(0, prodStartIdx);
+      const after  = newHTML.slice(prodEndIdx + mapToken.length);
+      newHTML = before + `let PRODUCTS = (${productsJSON})${mapToken}` + after;
+      prodChanged = true;
     }
 
     // ── Remplacement BLOG_POSTS ──
-    // Pattern large couvrant toutes les variantes
-    const blogPatterns = [
-      /let BLOG_POSTS = JSON\.parse\(localStorage\.getItem\('fc_blog'\)[^)]*\)\s*\|\|\s*\[[\s\S]*?\]\s*;/,
-      /let BLOG_POSTS = \[[\s\S]*?\]\s*;/,
-      /let BLOG_POSTS = JSON\.parse\([\s\S]*?\)\s*;/,
-    ];
-    for (const pat of blogPatterns) {
-      if (pat.test(newHTML)) {
-        newHTML = newHTML.replace(pat, `let BLOG_POSTS = ${blogJSON};`);
-        changed = true;
-        break;
+    // Chercher "let BLOG_POSTS" jusqu'au prochain ";" après le dernier "]"
+    const blogStartIdx = newHTML.indexOf('let BLOG_POSTS');
+    if (blogStartIdx !== -1) {
+      // Trouver la fin du bloc : chercher "];" ou "] ;" après blogStartIdx
+      // On cherche le premier ";" après le dernier "]" dans le bloc blog
+      // Approche robuste : trouver "let ORDERS" ou "// Ads config" qui vient après
+      const blogEndMarkers = ['let ORDERS', '// Ads config', 'const ADS_DEFAULTS', 'const ADMIN_PWD_KEY'];
+      let blogEndIdx = -1;
+      for (const marker of blogEndMarkers) {
+        const idx = newHTML.indexOf(marker, blogStartIdx + 100);
+        if (idx !== -1) { blogEndIdx = idx; break; }
+      }
+      if (blogEndIdx !== -1) {
+        const blogBlock = newHTML.slice(blogStartIdx, blogEndIdx);
+        // Le bloc doit se terminer par "];" ou "] ;" — on coupe juste avant blogEndIdx
+        // Trouver le dernier ";" dans le bloc
+        const lastSemi = blogBlock.lastIndexOf(';');
+        if (lastSemi !== -1) {
+          const before = newHTML.slice(0, blogStartIdx);
+          const after  = newHTML.slice(blogStartIdx + lastSemi + 1);
+          newHTML = before + `let BLOG_POSTS = ${blogJSON};` + after;
+          blogChanged = true;
+        }
       }
     }
 
-    if (!changed) {
-      throw new Error('Structure du fichier non reconnue — impossible d\'injecter les données. Contactez le support.');
+    // ── Rapport après injection ──
+    const debugLines = [
+      `📦 Fichier source: ${srcSize} Ko`,
+      `🔄 PRODUCTS injecté: ${prodChanged ? '✅ OUI' : '❌ ÉCHEC'} (trouvé à pos ${prodStartIdx}, fin à ${prodEndIdx})`,
+      `🔄 BLOG injecté: ${blogChanged ? '✅ OUI' : '❌ ÉCHEC'} (trouvé à pos ${blogStartIdx})`,
+    ];
+
+    if (!prodChanged) {
+      debugLines.push(`❌ RAISON PRODUCTS: "let PRODUCTS" idx=${prodStartIdx}, ".map(normalizeProduct);" idx=${prodEndIdx}`);
+      debugLines.push(`📍 Contexte: ${ctx(sourceHTML, 'PRODUCTS')}`);
+    }
+    if (!blogChanged) {
+      debugLines.push(`❌ RAISON BLOG: "let BLOG_POSTS" idx=${blogStartIdx}`);
+      debugLines.push(`📍 Contexte: ${ctx(sourceHTML, 'BLOG_POSTS')}`);
+    }
+
+    dbg(debugLines);
+    await new Promise(r => setTimeout(r, 600));
+
+    if (!prodChanged && !blogChanged) {
+      throw new Error(`Injection impossible — voir le rapport de debug ci-dessus. "let PRODUCTS" ${hasProd?'trouvé':'ABSENT'}, "let BLOG_POSTS" ${hasBlog?'trouvé':'ABSENT'}, ".map(normalizeProduct)" ${hasMap?'trouvé':'ABSENT'}`);
     }
 
     // ── Injection des commandes (ORDERS) si modifiées ──
     if (savedOrders) {
-      newHTML = newHTML.replace(
-        /let ORDERS = JSON\.parse\(localStorage\.getItem\('fc_orders'\)[^)]*\)\s*\|\|\s*\[[\s\S]*?\]\s*;/,
-        `let ORDERS = ${savedOrders};`
-      );
+      const ordStartIdx = newHTML.indexOf('let ORDERS');
+      if (ordStartIdx !== -1) {
+        const ordEndMarkers = ['// Ads config', 'const ADS_DEFAULTS', 'const ADMIN_PWD_KEY'];
+        for (const marker of ordEndMarkers) {
+          const idx = newHTML.indexOf(marker, ordStartIdx + 50);
+          if (idx !== -1) {
+            const ordBlock = newHTML.slice(ordStartIdx, idx);
+            const lastSemi = ordBlock.lastIndexOf(';');
+            if (lastSemi !== -1) {
+              newHTML = newHTML.slice(0, ordStartIdx) + `let ORDERS = ${savedOrders};` + newHTML.slice(ordStartIdx + lastSemi + 1);
+            }
+            break;
+          }
+        }
+      }
     }
 
     // 3. Encoder en base64 (UTF-8 safe)
+    statusEl.textContent = '⏳ Encodage en base64...';
     const encBytes = new TextEncoder().encode(newHTML);
-
-    // ── Vérification taille : l'API GitHub accepte max ~100 Mo, mais ~50 Mo pratiquement ──
     const fileSizeMB = (encBytes.length / 1024 / 1024).toFixed(2);
-    if (encBytes.length > 50 * 1024 * 1024) {
-      throw new Error(`Fichier trop grand (${fileSizeMB} Mo). Utilisez des URL externes plutôt que des images locales pour certains produits.`);
-    }
-    statusEl.textContent = `⏳ Encodage (${fileSizeMB} Mo)...`;
+    dbg([...debugLines, `📤 Taille finale à envoyer: ${fileSizeMB} Mo`]);
 
-    // Encodage base64 par chunks pour éviter les erreurs sur les gros fichiers
+    if (encBytes.length > 50 * 1024 * 1024) {
+      throw new Error(`Fichier trop grand (${fileSizeMB} Mo). Utilisez des URL externes pour certaines images.`);
+    }
+
     let binary = '';
     const chunkSize = 8192;
     for (let i = 0; i < encBytes.length; i += chunkSize) {
@@ -4825,23 +4840,28 @@ async function publishToGitHub() {
     });
 
     if (!putResp.ok) {
-      const err = await putResp.json();
-      throw new Error(err.message || 'Erreur lors de la publication');
+      const errData = await putResp.json();
+      throw new Error(`GitHub API ${putResp.status}: ${errData.message || 'Erreur inconnue'}`);
     }
 
-    // 5. Succès — rouvrir l'admin
+    // 5. Succès
     document.getElementById('adminModal').classList.add('open');
     showAdmTab('settings', document.querySelector('.adm-nav-item:last-child'));
 
     statusEl.innerHTML = '<span style="color:#27ae60">✅ Publié !</span>';
-    tokenStatusEl.innerHTML = `<span style="color:#27ae60">🎉 Boutique publiée (${fileSizeMB} Mo) — ${productsWithImgs.length} produits · ${blogWithImgs.length} articles · ${nbImgProd + nbImgBlog} images embarquées. Visible dans ~1 minute.</span>`;
-    showSaveBanner('GitHub', `🚀 Boutique publiée (${fileSizeMB} Mo) — visible par tous dans 1 minute`);
+    tokenStatusEl.innerHTML = `<span style="color:#27ae60">🎉 Publié (${fileSizeMB} Mo) — ${productsWithImgs.length} produits · ${blogWithImgs.length} articles. Visible dans ~1 minute.</span>`;
+    showSaveBanner('GitHub', `🚀 Boutique publiée (${fileSizeMB} Mo) — visible dans 1 minute`);
 
   } catch (err) {
-    // Rouvrir l'admin même en cas d'erreur
     document.getElementById('adminModal').classList.add('open');
     statusEl.innerHTML = '<span style="color:#e74c3c">❌ Erreur</span>';
-    tokenStatusEl.innerHTML = `<span style="color:#e74c3c">❌ ${err.message}</span>`;
+    // Ne pas écraser le debug déjà affiché si c'est l'erreur d'injection
+    if (!err.message.includes('Injection impossible')) {
+      tokenStatusEl.innerHTML = `<span style="color:#e74c3c">❌ ${err.message}</span>`;
+    } else {
+      // Ajouter l'erreur sous le debug existant
+      tokenStatusEl.innerHTML += `<div style="color:#e74c3c;margin-top:6px;font-size:12px">❌ ${err.message}</div>`;
+    }
   }
 }
 
