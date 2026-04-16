@@ -1,0 +1,101 @@
+<!-- ═══ SHARED MODALS — included in every page ═══ -->
+
+<!-- Product Modal -->
+<!-- PRODUCT MODAL -->
+<div class="overlay" id="productModal">
+  <div class="modal">
+    <div class="modal-img-col">
+      <div>
+        <img id="modalImg" class="modal-img" src="" alt="">
+        <button class="modal-img-nav prev" onclick="navModalImg(-1)">‹</button>
+        <button class="modal-img-nav next" onclick="navModalImg(1)">›</button>
+        <div class="modal-img-counter" id="modalImgCounter">1/1</div>
+        <button class="modal-zoom-btn" onclick="zoomImg()">⤢</button>
+      </div>
+      <div class="modal-thumbs" id="modalThumbs"></div>
+    </div>
+    <div class="modal-info-col">
+      <button style="align-self:flex-end;background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer" onclick="closeProduct()">✕</button>
+      <div id="modalInfo"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Cart -->
+<div class="cart-overlay" id="cartOverlay" onclick="closeCart()"></div>
+<div class="cart-sidebar" id="cartSidebar">
+  <div class="cart-head">
+    <div class="cart-head-title">Mon Panier</div>
+    <button class="cart-close" onclick="closeCart()">✕</button>
+  </div>
+  <div class="cart-body" id="cartBody">
+    <div id="cartItems"><div class="cart-empty">🛒<br>Votre panier est vide</div></div>
+  </div>
+  <div class="cart-foot" id="cartFooter"></div>
+</div>
+
+<!-- Zoom -->
+<div id="zoomOverlay" onclick="this.classList.remove('open')">
+  <img id="zoomImg" src="" alt="">
+</div>
+
+<!-- Checkout -->
+<div id="checkoutModal">
+  <div class="checkout-box">
+    <button class="checkout-close" onclick="closeCheckout()">✕</button>
+
+    <!-- STEP 1 : Informations client -->
+    <div class="checkout-step active" id="chk-step-1">
+      <div class="checkout-box-header">📦 Votre commande</div>
+      <div class="checkout-box-sub">Remplissez vos coordonnées avant de payer</div>
+      <div class="checkout-box-body">
+        <div class="chk-summary" id="chk-summary-1"></div>
+        <div class="chk-2col">
+          <div class="chk-field"><label>Prénom *</label><input id="chk-prenom" placeholder="Fatima"></div>
+          <div class="chk-field"><label>Nom *</label><input id="chk-nom" placeholder="Zahra"></div>
+        </div>
+        <div class="chk-field"><label>Email * <span style="color:var(--muted);font-size:10px">(confirmation envoyée ici)</span></label><input id="chk-email" type="email" placeholder="votre@email.com"></div>
+        <div class="chk-field"><label>Adresse de livraison *</label><input id="chk-adresse" placeholder="12 Rue des Roses, Paris 75001"></div>
+        <div class="chk-2col">
+          <div class="chk-field"><label>Ville *</label><input id="chk-ville" placeholder="Paris"></div>
+          <div class="chk-field"><label>Pays *</label><input id="chk-pays" placeholder="France"></div>
+        </div>
+        <button class="btn btn-gold" onclick="chkGoToPayment()" style="margin-top:8px">Continuer vers le paiement →</button>
+      </div>
+    </div>
+
+    <!-- STEP 2 : Choix paiement -->
+    <div class="checkout-step" id="chk-step-2">
+      <div class="checkout-box-header">💳 Paiement</div>
+      <div class="checkout-box-sub">Choisissez votre méthode de paiement</div>
+      <div class="checkout-box-body">
+        <div class="chk-summary" id="chk-summary-2"></div>
+        <div class="chk-pay-btns" id="chk-pay-btns"></div>
+        <button class="btn btn-ghost" onclick="chkBackToInfo()" style="margin-top:12px;font-size:11px">← Modifier mes informations</button>
+      </div>
+    </div>
+
+    <!-- STEP 3 : Confirmation -->
+    <div class="checkout-step" id="chk-step-3">
+      <div class="checkout-box-header">✅ Commande confirmée</div>
+      <div class="checkout-box-sub">Votre commande a bien été enregistrée</div>
+      <div class="checkout-box-body">
+        <div class="chk-confirm-box">
+          <div class="chk-confirm-icon">🎉</div>
+          <div style="font-size:14px;color:var(--muted);margin-bottom:8px">Votre code de suivi unique</div>
+          <div class="chk-confirm-code" id="chk-tracking-code">FC-000</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:8px;line-height:1.7">
+            Un email de confirmation a été envoyé à <strong id="chk-confirm-email" style="color:var(--gold2)"></strong><br>
+            Utilisez ce code sur la page <strong style="color:var(--gold2)">Suivi</strong> pour suivre l'avancement de votre commande.
+          </div>
+          <div style="margin-top:20px;background:var(--ink3);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:12px;color:var(--muted);text-align:left">
+            <div style="color:var(--gold2);font-weight:700;margin-bottom:6px">📋 Récapitulatif</div>
+            <div id="chk-confirm-recap"></div>
+          </div>
+        </div>
+        <button class="btn btn-gold" onclick="chkFinish()" style="margin-top:16px">Fermer et suivre ma commande</button>
+      </div>
+    </div>
+
+  </div>
+</div>
