@@ -28,8 +28,11 @@ window.addEventListener('DOMContentLoaded', async () => {
   if (typeof renderAffiliatePage === 'function') renderAffiliatePage();
   if (typeof renderReviews     === 'function') renderReviews();
 
-  // 5. Email popup after 5s
-  setTimeout(openEmailPopup, 5000);
+  // 5. Cookie banner
+  if (typeof showCookieBanner === 'function') showCookieBanner();
+
+  // 6. Email popup after 8s (after cookie banner)
+  setTimeout(openEmailPopup, 8000);
 });
 
 // ── Page router ───────────────────────────────────────────────────────────
