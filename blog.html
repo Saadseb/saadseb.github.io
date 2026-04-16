@@ -943,8 +943,10 @@ footer {
   background:rgba(8,6,0,0.98); border-top:2px solid var(--gold);
   padding:16px 24px; display:flex; align-items:center; gap:16px;
   flex-wrap:wrap; backdrop-filter:blur(12px);
+  transform:translateY(100%); transition:transform 0.4s ease;
   pointer-events:all;
 }
+#cookieBanner.show { transform:translateY(0); }
 #cookieBanner p { flex:1; font-size:13px; color:var(--ivory); min-width:200px; line-height:1.6; }
 .cookie-btns { display:flex; gap:8px; flex-shrink:0; }
 .btn-cookie-accept {
@@ -1570,7 +1572,7 @@ body.nav-scrolled #promoBanner { top:60px; }
 
 <div class="page active" id="page-blog">
   <div class="blog-hero">
-    <div class="blog-hero-photo" style="background-image:url('images/backgrounds/blog-header.jpg')"></div>
+    <div class="blog-hero-photo" style="background-image:url('images/backgrounds/mosque-wide.jpg')"></div>
     <div class="blog-hero-overlay"></div>
     <div class="blog-hero-content">
       <div class="section-eyebrow">Le Magazine</div>
@@ -1582,7 +1584,39 @@ body.nav-scrolled #promoBanner { top:60px; }
   <div class="ad-zone" id="ad-blog_top" style="display:flex;justify-content:center;padding:24px 0;">
     
   </div>
-  <section id="blogListSection">
+  
+  <!-- EDITORIAL MODELS STRIP -->
+  <div style="display:flex;gap:0;overflow:hidden;height:280px;margin-bottom:60px">
+    <div style="flex:1;overflow:hidden">
+      <img src="images/backgrounds/model-1.jpg" loading="lazy"
+           style="width:100%;height:100%;object-fit:cover;object-position:center top;
+                  transition:transform .6s;filter:brightness(0.8)"
+           onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'"
+           alt="Style 1">
+    </div>
+    <div style="flex:1.4;overflow:hidden;position:relative">
+      <img src="images/backgrounds/fashion-hero.jpg" loading="lazy"
+           style="width:100%;height:100%;object-fit:cover;object-position:center 20%"
+           alt="Collection">
+      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+                  background:rgba(8,6,0,0.4)">
+        <div style="text-align:center">
+          <div style="font-family:'Cormorant Garamond',serif;font-size:2rem;color:var(--ivory);
+                      font-style:italic">Le Magazine</div>
+          <div style="font-size:10px;letter-spacing:4px;text-transform:uppercase;color:var(--gold)">FaizaCaftan</div>
+        </div>
+      </div>
+    </div>
+    <div style="flex:1;overflow:hidden">
+      <img src="images/backgrounds/model-3.jpg" loading="lazy"
+           style="width:100%;height:100%;object-fit:cover;object-position:center top;
+                  transition:transform .6s;filter:brightness(0.8)"
+           onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'"
+           alt="Style 3">
+    </div>
+  </div>
+
+<section id="blogListSection">
     <div class="blog-grid" id="blogGrid"></div>
   </section>
   <!-- AD ZONE BLOG BOTTOM — AdSense -->
@@ -1697,6 +1731,37 @@ body.nav-scrolled #promoBanner { top:60px; }
       </div>
     </div>
 
+  </div>
+</div>
+
+
+<!-- Email Popup -->
+<div id="emailPopup" onclick="closeEmailPopup()">
+  <div class="email-popup-box" onclick="event.stopPropagation()">
+    <button class="email-popup-close" onclick="event.stopPropagation();closeEmailPopup()" type="button">✕</button>
+    <img class="email-popup-img"
+         src="images/backgrounds/hero-2.jpg"
+         alt="FaizaCaftan collection">
+    <div class="email-popup-body">
+      <div class="email-popup-tag">✦ Offre exclusive</div>
+      <div class="email-popup-title">−10% sur votre<br><em>première commande</em></div>
+      <p class="email-popup-sub">Inscrivez-vous et recevez votre code promo + les nouvelles collections en avant-première.</p>
+      <div class="email-popup-form">
+        <input class="email-popup-input" id="popupEmail" type="email" placeholder="votre@email.com">
+        <button class="email-popup-btn" onclick="submitEmailPopup()">J'en profite →</button>
+      </div>
+      <div id="popupResult" style="font-size:12px;margin-top:10px;min-height:18px"></div>
+      <div class="email-popup-skip" onclick="closeEmailPopup()">Non merci, je préfère payer plein tarif</div>
+    </div>
+  </div>
+</div>
+
+<!-- Cookie Banner -->
+<div id="cookieBanner">
+  <p>🍪 Nous utilisons des cookies pour améliorer votre expérience et afficher des publicités personnalisées (Google AdSense). Voir notre <a onclick="openPolicyModal('cookies')" style="color:var(--gold2);cursor:pointer;text-decoration:underline">politique de confidentialité</a>.</p>
+  <div class="cookie-btns">
+    <button class="btn-cookie-accept" onclick="acceptCookies()">Accepter</button>
+    <button class="btn-cookie-reject" onclick="rejectCookies()">Refuser</button>
   </div>
 </div>
 
