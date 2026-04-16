@@ -70,13 +70,16 @@ function submitEmailPopup() {
   const list = getEmailList();
   const already = list.find(e => e.email === email);
   if(!already) {
-    list.push({
+    const newEntry = {
       email,
       date: new Date().toLocaleDateString('fr-FR'),
       heure: new Date().toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'}),
       src: 'popup'
-    });
+    };
+    list.push(newEntry);
     localStorage.setItem(EMAIL_LIST_KEY, JSON.stringify(list));
+    // Save to data.json via server.py
+    saveEmailToDataJson(newEntry).catch(() => {});
   }
 
   // Copier le code promo
@@ -379,3 +382,32 @@ function addAffTracking() {
 }
 
 
+
+// ── Cookie Banner ──────────────────────────────────────────────────────────
+function showCookieBanner() {
+  if (localStorage.getItem('fc_cookies_choice')) return; // already chose
+  const banner = document.getElementById('cookieBanner');
+  if (banner) {
+    setTimeout(() => banner.classList.add('show'), 1500);
+  }
+}
+
+function acceptCookies() {
+  localStorage.setItem('fc_cookies_choice', 'accepted');
+  const banner = document.getElementById('cookieBanner');
+  if (banner) banner.classList.remove('show');
+  // Load AdSense if accepted
+  if (!document.querySelector('script[src*="adsbygoogle"]')) {
+    const script = document.createElement('script');
+    script.async = true;
+    script.src   = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7479282629047694';
+    script.crossOrigin = 'anonymous';
+    document.head.appendChild(script);
+  }
+}
+
+function rejectCookies() {
+  localStorage.setItem('fc_cookies_choice', 'rejected');
+  const banner = document.getElementById('cookieBanner');
+  if (banner) banner.classList.remove('show');
+}
