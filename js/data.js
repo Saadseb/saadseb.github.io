@@ -115,39 +115,36 @@ async function loadData() {
 function applyBackgrounds() {
   if (!BACKGROUNDS) return;
 
-  // Hero main
-  const heroBg = document.getElementById('heroBg');
-  if (heroBg && BACKGROUNDS.hero)
-    heroBg.style.backgroundImage = `url('${BACKGROUNDS.hero}')`;
-
-  // About/Atelier
-  const aboutPhoto = document.querySelector('.about-hero-photo');
-  if (aboutPhoto && BACKGROUNDS.atelier)
-    aboutPhoto.style.backgroundImage = `url('${BACKGROUNDS.atelier}')`;
-
-  // Contact
-  const contactPhoto = document.querySelector('.contact-hero-photo');
-  if (contactPhoto && BACKGROUNDS.contact)
-    contactPhoto.style.backgroundImage = `url('${BACKGROUNDS.contact}')`;
-
-  // Blog
-  const blogPhoto = document.querySelector('.blog-hero-photo');
-  if (blogPhoto && BACKGROUNDS.blog_header)
-    blogPhoto.style.backgroundImage = `url('${BACKGROUNDS.blog_header}')`;
-
-  // Inline-style hero divs (boutique, suivi, affiliation)
-  // These have background-image already set in HTML — override if needed
-  const inlineHeroBgs = {
-    'page-shop':      BACKGROUNDS.boutique,
-    'page-suivi':     BACKGROUNDS.blog_header,
-    'page-affiliate': BACKGROUNDS.pattern_bg,
+  // Helper: set background-image on element
+  const setBg = (el, key) => {
+    if (el && BACKGROUNDS[key]) 
+      el.style.backgroundImage = `url('${BACKGROUNDS[key]}')`;
   };
-  for (const [pageId, bgUrl] of Object.entries(inlineHeroBgs)) {
-    if (!bgUrl) continue;
+
+  // Hero
+  setBg(document.getElementById('heroBg'), 'hero');
+
+  // Section photo divs
+  setBg(document.querySelector('.about-hero-photo'),   'atelier');
+  setBg(document.querySelector('.contact-hero-photo'), 'contact');
+  setBg(document.querySelector('.blog-hero-photo'),    'blog_header');
+
+  // Inline background-image pages (boutique, suivi, affiliation)
+  const inlineMap = {
+    'page-shop':      'boutique',
+    'page-suivi':     'suivi',
+    'page-affiliate': 'affiliation',
+    'page-about':     'about',
+    'page-mentions':  'about',
+    'page-privacy':   'about',
+    'page-cgv':       'about',
+  };
+
+  for (const [pageId, bgKey] of Object.entries(inlineMap)) {
     const page = document.getElementById(pageId);
-    if (!page) continue;
-    const photoDivs = page.querySelectorAll('[style*="background-image"]');
-    if (photoDivs.length > 0)
-      photoDivs[0].style.backgroundImage = `url('${bgUrl}')`;
+    if (!page || !BACKGROUNDS[bgKey]) continue;
+    // First div with background-image style in this page
+    const bgDiv = page.querySelector('[style*="background-image"]');
+    if (bgDiv) bgDiv.style.backgroundImage = `url('${BACKGROUNDS[bgKey]}')`;
   }
 }
