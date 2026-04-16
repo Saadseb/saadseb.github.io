@@ -943,8 +943,10 @@ footer {
   background:rgba(8,6,0,0.98); border-top:2px solid var(--gold);
   padding:16px 24px; display:flex; align-items:center; gap:16px;
   flex-wrap:wrap; backdrop-filter:blur(12px);
+  transform:translateY(100%); transition:transform 0.4s ease;
   pointer-events:all;
 }
+#cookieBanner.show { transform:translateY(0); }
 #cookieBanner p { flex:1; font-size:13px; color:var(--ivory); min-width:200px; line-height:1.6; }
 .cookie-btns { display:flex; gap:8px; flex-shrink:0; }
 .btn-cookie-accept {
@@ -1539,6 +1541,88 @@ body.nav-scrolled #promoBanner { top:60px; }
 .sparkline { display:flex; align-items:flex-end; gap:3px; height:40px; margin-top:10px; }
 .spark-bar { flex:1; border-radius:2px 2px 0 0; background:var(--adm-accent); opacity:0.6; min-height:4px; transition:opacity 0.2s; }
 .spark-bar:hover { opacity:1; }
+
+/* ═══ EDITORIAL SECTION — Contemporary fashion layout ═══ */
+.editorial-section {
+  padding: 80px 24px;
+  max-width: var(--max);
+  margin: 0 auto;
+}
+.editorial-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: stretch;
+}
+.editorial-img-main {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--r);
+  height: 600px;
+}
+.editorial-img-main img {
+  width: 100%; height: 100%;
+  object-fit: cover; object-position: center top;
+  transition: transform 0.8s ease;
+}
+.editorial-img-main:hover img { transform: scale(1.03); }
+.editorial-label-main {
+  position: absolute; bottom: 24px; left: 24px;
+  background: rgba(8,6,0,0.7); backdrop-filter: blur(8px);
+  border: 1px solid var(--border2);
+  padding: 12px 20px; border-radius: 8px;
+  display: flex; flex-direction: column;
+}
+.editorial-label-main span {
+  font-size: 10px; letter-spacing: 4px; text-transform: uppercase;
+  color: var(--gold); margin-bottom: 2px;
+}
+.editorial-label-main strong {
+  font-family: 'Cormorant Garamond', serif; font-size: 1.2rem; color: var(--ivory);
+}
+.editorial-col-right {
+  display: grid;
+  grid-template-rows: 1fr auto 1fr;
+  gap: 16px;
+}
+.editorial-img-top, .editorial-img-bottom {
+  position: relative; overflow: hidden;
+  border-radius: var(--r);
+}
+.editorial-img-top img, .editorial-img-bottom img {
+  width: 100%; height: 100%;
+  object-fit: cover; object-position: center top;
+  transition: transform 0.8s ease;
+  min-height: 200px;
+}
+.editorial-img-top:hover img,
+.editorial-img-bottom:hover img { transform: scale(1.03); }
+.editorial-label-small {
+  position: absolute; bottom: 12px; left: 16px;
+  background: rgba(8,6,0,0.75); backdrop-filter: blur(6px);
+  border: 1px solid var(--border);
+  padding: 6px 14px; border-radius: 6px;
+  font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
+  color: var(--gold3);
+}
+.editorial-text-card {
+  background: var(--ink2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 32px 28px;
+}
+@media(max-width:768px) {
+  .editorial-grid { grid-template-columns: 1fr; }
+  .editorial-img-main { height: 400px; }
+  .editorial-col-right { grid-template-rows: auto; }
+}
+
+/* ═══ YARN BG — Mosque background ═══ */
+.yarn-bg-section {
+  background: linear-gradient(rgba(8,6,0,0.75), rgba(8,6,0,0.75)),
+              url('images/backgrounds/mosque-wide.jpg') center/cover no-repeat;
+}
+
 </style>
 </head>
 <body>
@@ -1597,10 +1681,10 @@ body.nav-scrolled #promoBanner { top:60px; }
 
   <!-- PHOTO BAND -->
   <div class="photo-band">
-    <div class="photo-band-cell"><img src="" alt="Laines colorées" loading="lazy"></div>
-    <div class="photo-band-cell"><img src="" alt="Céramiques" loading="lazy"></div>
-    <div class="photo-band-cell"><img src="" alt="Babouches" loading="lazy"></div>
-    <div class="photo-band-cell"><img src="" alt="Tissus" loading="lazy"></div>
+    <div class="photo-band-cell"><img src="images/backgrounds/model-1.jpg" alt="Collection Caftan" loading="lazy"></div>
+    <div class="photo-band-cell"><img src="images/backgrounds/model-2.jpg" alt="Élégance Marocaine" loading="lazy"></div>
+    <div class="photo-band-cell"><img src="images/backgrounds/model-3.jpg" alt="Takchita Luxe" loading="lazy"></div>
+    <div class="photo-band-cell"><img src="images/backgrounds/mode.jpg" alt="Mode Marocaine" loading="lazy"></div>
   </div>
 
   <!-- AD ZONE HOME TOP — AdSense -->
@@ -1630,11 +1714,47 @@ body.nav-scrolled #promoBanner { top:60px; }
 
   <!-- CERAMICS STRIP -->
   <div class="ceramics-strip">
-    <img src="" alt="Céramiques marocaines" class="ceramics-strip-photo" loading="lazy">
+    <img src="images/backgrounds/fashion-hero.jpg" alt="Collection FaizaCaftan" class="ceramics-strip-photo" loading="lazy">
     <div class="ceramics-strip-overlay">
-      <div class="ceramics-strip-text">Artisanat Marocain depuis des Siècles</div>
+      <div class="ceramics-strip-text">L'Art du Caftan Marocain</div>
     </div>
   </div>
+
+  <!-- EDITORIAL SECTION — Contemporary fashion split -->
+  <section class="editorial-section">
+    <div class="editorial-grid">
+      <div class="editorial-img-main">
+        <img src="images/backgrounds/model-2.jpg" alt="Collection Printemps 2026" loading="lazy">
+        <div class="editorial-label-main">
+          <span>Collection</span>
+          <strong>Printemps 2026</strong>
+        </div>
+      </div>
+      <div class="editorial-col-right">
+        <div class="editorial-img-top">
+          <img src="images/backgrounds/fashion-portrait.jpg" alt="Caftan Royal" loading="lazy">
+          <div class="editorial-label-small">Caftan Royal Doré</div>
+        </div>
+        <div class="editorial-text-card">
+          <div class="section-eyebrow">Savoir-Faire</div>
+          <h2 style="font-family:'Cormorant Garamond',serif;font-size:clamp(1.6rem,3vw,2.4rem);color:var(--ivory);line-height:1.2;margin:12px 0">
+            L'élégance marocaine<br><em style="color:var(--gold2)">réinventée</em>
+          </h2>
+          <p style="color:var(--muted);font-size:14px;line-height:1.8;margin-bottom:24px">
+            Chaque caftan est une œuvre unique, brodée à la main par nos artisans de Fès. 
+            Des fils d'or et d'argent tissent des histoires millénaires sur des soieries précieuses.
+          </p>
+          <a href="boutique.html" class="btn-hero btn-primary" style="display:inline-block;text-decoration:none;font-size:13px;padding:12px 28px">
+            Voir la Collection →
+          </a>
+        </div>
+        <div class="editorial-img-bottom">
+          <img src="images/backgrounds/caftan-mariage.jpg" alt="Caftan Mariage" loading="lazy">
+          <div class="editorial-label-small">Caftans Mariage</div>
+        </div>
+      </div>
+    </div>
+  </section>
 
   <!-- FEATURES — yarn background -->
   <div class="yarn-bg-section">
@@ -1822,6 +1942,37 @@ body.nav-scrolled #promoBanner { top:60px; }
       </div>
     </div>
 
+  </div>
+</div>
+
+
+<!-- Email Popup -->
+<div id="emailPopup" onclick="closeEmailPopup()">
+  <div class="email-popup-box" onclick="event.stopPropagation()">
+    <button class="email-popup-close" onclick="event.stopPropagation();closeEmailPopup()" type="button">✕</button>
+    <img class="email-popup-img"
+         src="images/backgrounds/hero-2.jpg"
+         alt="FaizaCaftan collection">
+    <div class="email-popup-body">
+      <div class="email-popup-tag">✦ Offre exclusive</div>
+      <div class="email-popup-title">−10% sur votre<br><em>première commande</em></div>
+      <p class="email-popup-sub">Inscrivez-vous et recevez votre code promo + les nouvelles collections en avant-première.</p>
+      <div class="email-popup-form">
+        <input class="email-popup-input" id="popupEmail" type="email" placeholder="votre@email.com">
+        <button class="email-popup-btn" onclick="submitEmailPopup()">J'en profite →</button>
+      </div>
+      <div id="popupResult" style="font-size:12px;margin-top:10px;min-height:18px"></div>
+      <div class="email-popup-skip" onclick="closeEmailPopup()">Non merci, je préfère payer plein tarif</div>
+    </div>
+  </div>
+</div>
+
+<!-- Cookie Banner -->
+<div id="cookieBanner">
+  <p>🍪 Nous utilisons des cookies pour améliorer votre expérience et afficher des publicités personnalisées (Google AdSense). Voir notre <a onclick="openPolicyModal('cookies')" style="color:var(--gold2);cursor:pointer;text-decoration:underline">politique de confidentialité</a>.</p>
+  <div class="cookie-btns">
+    <button class="btn-cookie-accept" onclick="acceptCookies()">Accepter</button>
+    <button class="btn-cookie-reject" onclick="rejectCookies()">Refuser</button>
   </div>
 </div>
 
