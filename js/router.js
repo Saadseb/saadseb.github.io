@@ -16,7 +16,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   // 4. Render based on active page
   if (typeof updateCartBadge   === 'function') updateCartBadge();
-  if (typeof applyAdsConfig    === 'function') applyAdsConfig();
+  // applyAdsConfig is called by analytics.js after AdSense script loads
   if (typeof trackVisit        === 'function') trackVisit();
   if (typeof setReviewStar     === 'function') setReviewStar(5);
 
