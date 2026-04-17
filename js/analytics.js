@@ -1,4 +1,27 @@
 /* ═══ ANALYTICS — Stats, Reviews, Email, Tracking ═══ */
+
+/* ═══════════ ADSENSE LOADER ═══════════ */
+function loadAdsenseScript(onLoaded) {
+  if (document.querySelector('script[src*="adsbygoogle"]')) {
+    if (onLoaded) onLoaded();
+    return;
+  }
+  const script = document.createElement('script');
+  script.async = true;
+  script.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=' + (ADS_CONFIG.adsenseId || ADS_DEFAULTS.adsenseId);
+  script.crossOrigin = 'anonymous';
+  if (onLoaded) script.onload = onLoaded;
+  document.head.appendChild(script);
+}
+
+// Auto-load AdSense if user already accepted cookies (returning visitors)
+document.addEventListener('DOMContentLoaded', () => {
+  if (localStorage.getItem('fc_cookies_choice') === 'accepted') {
+    loadAdsenseScript(() => {
+      if (typeof applyAdsConfig === 'function') applyAdsConfig();
+    });
+  }
+});
 /* ═══════════ KEYBOARD ═══════════ */
 document.addEventListener('keydown', e => {
   if(e.key==='Enter' && document.activeElement===document.getElementById('trackCode')) chercher();
@@ -393,14 +416,10 @@ function acceptCookies() {
   localStorage.setItem('fc_cookies_choice', 'accepted');
   const banner = document.getElementById('cookieBanner');
   if (banner) banner.classList.remove('show');
-  // Load AdSense if accepted
-  if (!document.querySelector('script[src*="adsbygoogle"]')) {
-    const script = document.createElement('script');
-    script.async = true;
-    script.src   = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7479282629047694';
-    script.crossOrigin = 'anonymous';
-    document.head.appendChild(script);
-  }
+  // Load AdSense then inject ad slots
+  loadAdsenseScript(() => {
+    if (typeof applyAdsConfig === 'function') applyAdsConfig();
+  });
 }
 
 function rejectCookies() {
