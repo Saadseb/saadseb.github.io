@@ -3,7 +3,25 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="FaizaCaftan — Mentions Légales. Caftans marocains de luxe, brodés à la main.">
+  <meta name="description" content="Mentions légales de FaizaCaftan, boutique de caftans marocains. Informations légales, éditeur et hébergement.">
+  <meta name="keywords" content="mentions légales faizacaftan">
+  <meta name="robots" content="index, follow">
+  <meta name="author" content="FaizaCaftan">
+  <meta name="google-site-verification" content="cKCwsoOPEvUtPKQjs-lftN7r_SEnLJhmsvvgjpRMu6g">
+  <link rel="canonical" href="https://saadseb.github.io/mentions.html">
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="FaizaCaftan">
+  <meta property="og:locale" content="fr_FR">
+  <meta property="og:url" content="https://saadseb.github.io/mentions.html">
+  <meta property="og:title" content="Mentions Légales — FaizaCaftan">
+  <meta property="og:description" content="Mentions légales de FaizaCaftan, boutique de caftans marocains. Informations légales, éditeur et hébergement.">
+  <meta property="og:image" content="https://saadseb.github.io/images/backgrounds/hero.jpg">
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Mentions Légales — FaizaCaftan">
+  <meta name="twitter:description" content="Mentions légales de FaizaCaftan, boutique de caftans marocains. Informations légales, éditeur et hébergement.">
+  <meta name="twitter:image" content="https://saadseb.github.io/images/backgrounds/hero.jpg">
   <title>Mentions Légales — FaizaCaftan</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;0,700;1,300;1,400&family=Tajawal:wght@300;400;500;700&family=Cinzel:wght@400;600&family=Playfair+Display:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
@@ -1631,13 +1649,30 @@ body.nav-scrolled #promoBanner { top:60px; }
 
 <!-- Cookie Banner -->
 <div id="cookieBanner">
-  <p>🍪 Nous utilisons des cookies pour améliorer votre expérience et afficher des publicités personnalisées (Google AdSense). Voir notre <a onclick="openPolicyModal('cookies')" style="color:var(--gold2);cursor:pointer;text-decoration:underline">politique de confidentialité</a>.</p>
-  <div class="cookie-btns">
-    <button class="btn-cookie-accept" onclick="acceptCookies()">Accepter</button>
-    <button class="btn-cookie-reject" onclick="rejectCookies()">Refuser</button>
+  <div style="flex:1">
+    <p style="margin:0 0 6px;font-size:14px;font-weight:600;color:var(--ivory)">🍪 Nous utilisons des cookies</p>
+    <p style="margin:0;font-size:12px;color:#aaa;line-height:1.6">
+      Nous utilisons des cookies analytiques et publicitaires (Google AdSense) pour améliorer votre expérience et financer ce site. 
+      Vous pouvez accepter ou refuser. Voir notre 
+      <a onclick="openPolicyModal('privacy')" style="color:var(--gold2);cursor:pointer;text-decoration:underline">politique de confidentialité</a>.
+    </p>
+  </div>
+  <div class="cookie-btns" style="display:flex;gap:10px;flex-shrink:0">
+    <button class="btn-cookie-accept" onclick="acceptCookies()">✅ Accepter</button>
+    <button class="btn-cookie-reject" onclick="rejectCookies()">❌ Refuser</button>
   </div>
 </div>
 
+<!-- Policy Modal -->
+<div class="overlay" id="policyModal" onclick="if(event.target===this)closePolicyModal()" style="z-index:450">
+  <div class="policy-modal">
+    <div class="policy-modal-header">
+      <div class="policy-modal-title" id="policyModalTitle"></div>
+      <button class="policy-modal-close" onclick="closePolicyModal()">✕</button>
+    </div>
+    <div class="policy-modal-body" id="policyModalBody"></div>
+  </div>
+</div>
 </body>
   <!-- ═══ FaizaCaftan JS Modules ═══ -->
   <script src="js/i18n.js"></script>
