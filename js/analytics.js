@@ -28,10 +28,12 @@ function getEmailList() {
 function openEmailPopup() {
   if(localStorage.getItem('fc_popup_dismissed')) return;
   if(localStorage.getItem('fc_popup_done')) return;
+  const popup = document.getElementById('emailPopup');
+  if(!popup) return;
   // Masquer le cookie banner pendant que le popup est ouvert
   const cb = document.getElementById('cookieBanner');
-  if(cb) cb.style.display = 'none';
-  document.getElementById('emailPopup').classList.add('open');
+  if(cb) cb.classList.remove('show');
+  popup.classList.add('open');
   // Focus automatique sur l'input
   setTimeout(() => {
     const inp = document.getElementById('popupEmail');
@@ -41,17 +43,12 @@ function openEmailPopup() {
 
 function closeEmailPopup() {
   const popup = document.getElementById('emailPopup');
-  if(popup) popup.classList.remove('open');
+  if(!popup) return;
+  popup.classList.remove('open');
   localStorage.setItem('fc_popup_dismissed', '1');
-  // Vider l'input et le résultat pour la prochaine ouverture éventuelle
-  const inp = document.getElementById('popupEmail');
-  if(inp) inp.value = '';
-  const res = document.getElementById('popupResult');
-  if(res) res.textContent = '';
-  // Restaurer le cookie banner si nécessaire
-  const consent = localStorage.getItem('fc_cookie_consent');
+  // Réafficher le cookie banner si pas encore choisi
   const cb = document.getElementById('cookieBanner');
-  if(cb && !consent) cb.style.display = 'flex';
+  if(cb && !localStorage.getItem('fc_cookies_choice')) cb.classList.add('show');
 }
 
 function submitEmailPopup() {
@@ -410,4 +407,9 @@ function rejectCookies() {
   localStorage.setItem('fc_cookies_choice', 'rejected');
   const banner = document.getElementById('cookieBanner');
   if (banner) banner.classList.remove('show');
+}
+
+function closePolicyModal() {
+  const el = document.getElementById('policyModal');
+  if(el) el.classList.remove('open');
 }
