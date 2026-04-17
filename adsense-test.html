@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🔍 Test AdSense — FaizaCaftan</title>
+  <style>
+    body { font-family: sans-serif; background: #0f0f0f; color: #f0f0f0; padding: 24px; max-width: 900px; margin: auto; }
+    h1 { color: #c9a84c; }
+    .card { background: #1a1a1a; border: 1px solid #333; border-radius: 10px; padding: 20px; margin: 16px 0; }
+    .status { display: inline-block; padding: 4px 12px; border-radius: 20px; font-weight: bold; font-size: 14px; }
+    .ok  { background: #1a4a1a; color: #4caf50; }
+    .err { background: #4a1a1a; color: #f44336; }
+    .warn { background: #4a3a1a; color: #ff9800; }
+    .row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #2a2a2a; }
+    .row:last-child { border-bottom: none; }
+    label { color: #aaa; font-size: 14px; }
+    .ad-preview { background: #222; border: 2px dashed #555; border-radius: 8px; min-height: 90px; display: flex; align-items: center; justify-content: center; color: #666; font-size: 13px; margin-top: 10px; }
+    button { background: #c9a84c; color: #000; border: none; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+    button:hover { background: #e8c96a; }
+    .log { font-family: monospace; font-size: 12px; background: #111; padding: 12px; border-radius: 6px; max-height: 200px; overflow-y: auto; color: #4caf50; }
+  </style>
+</head>
+<body>
+  <h1>🔍 Diagnostic AdSense — FaizaCaftan</h1>
+
+  <div class="card">
+    <h3>1. Configuration AdSense</h3>
+    <div class="row"><label>ID Publisher (data.js)</label><span id="chk-pubid"></span></div>
+    <div class="row"><label>ID dans analytics.js</label><span id="chk-analyticsid"></span></div>
+    <div class="row"><label>Consentement cookie</label><span id="chk-consent"></span></div>
+    <div class="row"><label>Script AdSense chargé</label><span id="chk-script"></span></div>
+    <div class="row"><label>window.adsbygoogle</label><span id="chk-array"></span></div>
+  </div>
+
+  <div class="card">
+    <h3>2. Emplacements publicitaires</h3>
+    <div class="row"><label>ad-home_top (activé ?)</label><span id="chk-zone-home"></span></div>
+    <div class="row"><label>ad-between_products (activé ?)</label><span id="chk-zone-between"></span></div>
+    <div class="row"><label>ad-blog_top (activé ?)</label><span id="chk-zone-blog"></span></div>
+    <div class="row"><label>Stratégie</label><span id="chk-strategy"></span></div>
+  </div>
+
+  <div class="card">
+    <h3>3. Simuler un slot AdSense</h3>
+    <p style="color:#aaa;font-size:13px">Ce slot simule ce qui sera injecté sur le site réel :</p>
+    <div class="ad-preview" id="adPreview">⏳ En attente de simulation...</div>
+    <br>
+    <button onclick="simulateAdSlot()">▶ Simuler l'injection AdSense</button>
+    &nbsp;
+    <button onclick="simulateAcceptCookies()" style="background:#444;color:#fff">🍪 Simuler acceptation cookies</button>
+  </div>
+
+  <div class="card">
+    <h3>4. Actions de test</h3>
+    <button onclick="clearConsent()">🗑 Reset consentement cookie</button>
+    &nbsp;
+    <button onclick="forceAccept()">✅ Forcer acceptation + charger AdSense</button>
+    <br><br>
+    <p style="color:#aaa;font-size:13px">⚠️ Pour voir de vraies publicités, le site doit être sur <strong style="color:#c9a84c">saadseb.github.io</strong> et le compte AdSense doit être approuvé.</p>
+  </div>
+
+  <div class="card">
+    <h3>5. Console de diagnostic</h3>
+    <div class="log" id="diagLog">Initialisation...</div>
+  </div>
+
+  <script>
+    // Mock ADS_CONFIG (from data.js)
+    const ADS_DEFAULTS = {
+      home_top: true, between_products: true, footer: true,
+      blog_top: true, blog_bottom: true,
+      adsenseId: 'ca-pub-7479282629047694', strategy: 'blog_heavy'
+    };
+    let ADS_CONFIG = Object.assign({}, ADS_DEFAULTS, JSON.parse(localStorage.getItem('fc_ads') || '{}'));
+    if (!ADS_CONFIG.adsenseId) ADS_CONFIG.adsenseId = ADS_DEFAULTS.adsenseId;
+
+    const log = (msg, type='info') => {
+      const el = document.getElementById('diagLog');
+      const color = type === 'ok' ? '#4caf50' : type === 'err' ? '#f44336' : type === 'warn' ? '#ff9800' : '#888';
+      el.innerHTML += `<div style="color:${color}">[${new Date().toLocaleTimeString()}] ${msg}</div>`;
+      el.scrollTop = el.scrollHeight;
+    };
+
+    const badge = (ok, text) => `<span class="status ${ok ? 'ok' : 'err'}">${text || (ok ? '✅ OK' : '❌ NON')}</span>`;
+    const warnBadge = (text) => `<span class="status warn">⚠️ ${text}</span>`;
+
+    function runDiag() {
+      // 1. Config
+      const pubId = ADS_CONFIG.adsenseId;
+      document.getElementById('chk-pubid').innerHTML = pubId 
+        ? badge(true, pubId) 
+        : badge(false, 'Manquant');
+
+      const analyticsId = 'ca-pub-7479282629047694'; // hardcoded in analytics.js
+      document.getElementById('chk-analyticsid').innerHTML = pubId === analyticsId
+        ? badge(true, 'Identiques ✓')
+        : warnBadge(`Différent: ${analyticsId}`);
+
+      const consent = localStorage.getItem('fc_cookies_choice');
+      document.getElementById('chk-consent').innerHTML = consent === 'accepted'
+        ? badge(true, 'Accepté')
+        : consent === 'rejected'
+        ? badge(false, 'Refusé')
+        : warnBadge('Pas encore choisi');
+
+      const scriptLoaded = !!document.querySelector('script[src*="adsbygoogle"]');
+      document.getElementById('chk-script').innerHTML = badge(scriptLoaded, scriptLoaded ? 'Chargé' : 'Non chargé');
+
+      const arrOk = Array.isArray(window.adsbygoogle);
+      document.getElementById('chk-array').innerHTML = arrOk 
+        ? badge(true, `Présent (${window.adsbygoogle.length} push)`) 
+        : badge(false, 'Non défini');
+
+      // 2. Zones
+      document.getElementById('chk-zone-home').innerHTML = badge(ADS_CONFIG.home_top, ADS_CONFIG.home_top ? 'Activé' : 'Désactivé');
+      document.getElementById('chk-zone-between').innerHTML = badge(ADS_CONFIG.between_products, ADS_CONFIG.between_products ? 'Activé' : 'Désactivé');
+      document.getElementById('chk-zone-blog').innerHTML = badge(ADS_CONFIG.blog_top, ADS_CONFIG.blog_top ? 'Activé' : 'Désactivé');
+      document.getElementById('chk-strategy').innerHTML = `<span class="status warn">${ADS_CONFIG.strategy || 'non défini'}</span>`;
+
+      // Logs
+      log('Diagnostic terminé.', 'info');
+      if (!consent) log('⚠️ Cookies pas encore acceptés → AdSense ne se chargera pas', 'warn');
+      if (consent === 'rejected') log('❌ Cookies refusés → AdSense bloqué', 'err');
+      if (consent === 'accepted' && !scriptLoaded) log('❌ Bug: cookies acceptés mais script non chargé (visiteur de retour)', 'err');
+      if (consent === 'accepted' && scriptLoaded) log('✅ AdSense script chargé correctement', 'ok');
+    }
+
+    function simulateAdSlot() {
+      const pubId = ADS_CONFIG.adsenseId;
+      const preview = document.getElementById('adPreview');
+      preview.innerHTML = `
+        <div style="width:100%;text-align:center;padding:10px">
+          <div style="color:#c9a84c;font-size:12px;margin-bottom:8px">📦 Slot injecté dans le DOM :</div>
+          <code style="color:#4caf50;font-size:11px;display:block;background:#111;padding:8px;border-radius:4px;text-align:left">
+&lt;ins class="adsbygoogle"<br>
+&nbsp;&nbsp;style="display:block;width:100%;min-height:90px"<br>
+&nbsp;&nbsp;data-ad-client="${pubId}"<br>
+&nbsp;&nbsp;data-ad-format="auto"<br>
+&nbsp;&nbsp;data-full-width-responsive="true"&gt;<br>
+&lt;/ins&gt;
+          </code>
+          <div style="color:#aaa;font-size:11px;margin-top:8px">Sur le site en ligne, Google remplira cet espace avec une publicité.</div>
+        </div>`;
+      log(`Slot simulé avec client="${pubId}"`, 'ok');
+    }
+
+    function simulateAcceptCookies() {
+      localStorage.setItem('fc_cookies_choice', 'accepted');
+      log('Cookie accepté. Rechargement du diagnostic...', 'ok');
+      setTimeout(runDiag, 300);
+    }
+
+    function clearConsent() {
+      localStorage.removeItem('fc_cookies_choice');
+      log('Consentement réinitialisé.', 'warn');
+      setTimeout(runDiag, 300);
+    }
+
+    function forceAccept() {
+      localStorage.setItem('fc_cookies_choice', 'accepted');
+      const pubId = ADS_CONFIG.adsenseId;
+      if (!document.querySelector('script[src*="adsbygoogle"]')) {
+        const s = document.createElement('script');
+        s.async = true;
+        s.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${pubId}`;
+        s.crossOrigin = 'anonymous';
+        s.onload = () => { log('✅ Script AdSense chargé avec succès!', 'ok'); runDiag(); };
+        s.onerror = () => { log('❌ Erreur chargement script (normal en local, ok en production)', 'warn'); runDiag(); };
+        document.head.appendChild(s);
+        log(`Chargement du script AdSense (${pubId})...`, 'info');
+      } else {
+        log('Script déjà présent.', 'warn');
+        runDiag();
+      }
+    }
+
+    // Run on load
+    window.adsbygoogle = window.adsbygoogle || [];
+    log('Page de diagnostic chargée.', 'info');
+    runDiag();
+  </script>
+</body>
+</html>
