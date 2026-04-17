@@ -172,8 +172,15 @@ async function publishToGitHub() {
       const imgs = p.images?.length ? p.images : [p.img];
       for (let j = 0; j < imgs.length; j++) {
         const src = imgs[j];
+        // If this gallery image is identical to the main image (base64), reuse resolvedImg
+        if (src?.startsWith('data:') && src === p.img) {
+          resolvedImages.push(resolvedImg);
+          continue;
+        }
+        // Use slug.jpg for index 0 (same as main), slug-2.jpg, slug-3.jpg... for rest
+        const suffix = j === 0 ? '' : `-${j}`;
         const ghPath = src?.startsWith('data:')
-          ? `images/products/${slug}-${j+1}.jpg` : src;
+          ? `images/products/${slug}${suffix}.jpg` : src;
         const url = await resolveImageUrl(src, token, ghPath, log);
         resolvedImages.push(url);
       }
