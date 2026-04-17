@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Diagnostic FaizaCaftan</title>
+<style>
+body { font-family: monospace; background: #0a0a0f; color: #ddd; padding: 20px; }
+.ok  { color: #58d68d; }
+.err { color: #e74c3c; }
+.warn{ color: #f39c12; }
+h2   { color: #c9a84c; border-bottom: 1px solid #333; padding-bottom: 8px; }
+pre  { background: #111; padding: 12px; border-radius: 6px; overflow-x: auto; font-size: 12px; }
+button { background: #6c63ff; color: #fff; border: none; padding: 10px 20px; 
+         border-radius: 6px; cursor: pointer; margin: 4px; font-size: 13px; }
+button:hover { opacity: .85; }
+#log { max-height: 400px; overflow-y: auto; }
+</style>
+</head>
+<body>
+
+<h2>🔍 FaizaCaftan — Diagnostic</h2>
+<p>Ouvre ce fichier depuis <strong>http://localhost:8000/test.html</strong></p>
+
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px">
+  <button onclick="runAll()">▶ Tout tester</button>
+  <button onclick="clearLS()">🗑 Vider localStorage</button>
+  <button onclick="testModal()">🛍 Tester Modal Produit</button>
+  <button onclick="testCookies()">🍪 Tester Cookies</button>
+</div>
+
+<div id="log"></div>
+
+<!-- Minimal productModal pour test -->
+<div id="productModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:#1a1400;border:1px solid #c9a84c;border-radius:16px;padding:32px;max-width:500px;width:90%">
+    <button onclick="document.getElementById('productModal').style.display='none'" 
+            style="float:right;background:none;border:none;color:#fff;font-size:20px;cursor:pointer">✕</button>
+    <div id="modalInfo">...</div>
+    <img id="modalImg" src="" style="width:100%;height:200px;object-fit:cover;border-radius:8px;margin-top:12px">
+    <div id="modalImgCounter"></div>
+    <div id="modalThumbs"></div>
+  </div>
+</div>
+
+<!-- Policy Modal -->
+<div id="policyModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:#1a1400;border:1px solid #c9a84c;border-radius:16px;padding:32px;max-width:600px;width:90%;max-height:80vh;overflow-y:auto">
+    <button onclick="document.getElementById('policyModal').style.display='none'"
+            style="float:right;background:none;border:none;color:#fff;font-size:20px;cursor:pointer">✕</button>
+    <h3 id="policyModalTitle" style="color:#c9a84c"></h3>
+    <div id="policyModalBody"></div>
+  </div>
+</div>
+
+<script>
+const log = document.getElementById('log');
+
+function out(msg, type='') {
+  const d = document.createElement('div');
+  d.className = type;
+  d.textContent = new Date().toLocaleTimeString() + ' — ' + msg;
+  log.appendChild(d);
+  log.scrollTop = log.scrollHeight;
+  console.log(msg);
+}
+
+function clearLS() {
+  localStorage.clear();
+  out('✅ localStorage vidé — rechargez la page boutique', 'ok');
+}
+
+async function runAll() {
+  log.innerHTML = '';
+  out('=== DIAGNOSTIC DÉMARRÉ ===');
+  
+  // 1. Test fetch data.json
+  out('1. Test fetch data.json...');
+  try {
+    const r = await fetch('data.json?t=' + Date.now());
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    out('✅ data.json OK — ' + d.products?.length + ' produits, ' + d.blog?.length + ' articles', 'ok');
+    
+    // Show product IDs
+    if (d.products?.length) {
+      out('   IDs produits: ' + d.products.map(p => p.id + '(' + typeof p.id + ')').join(', '), 'warn');
+    }
+  } catch(e) {
+    out('❌ data.json ERREUR: ' + e.message, 'err');
+  }
+  
+  // 2. Test localStorage
+  out('\n2. Test localStorage...');
+  const lsKeys = ['fc_products','fc_blog','fc_affiliates','fc_cookies_choice','fc_popup_done','fc_popup_dismissed'];
+  for (const key of lsKeys) {
+    const val = localStorage.getItem(key);
+    if (val) {
+      const preview = val.length > 50 ? val.slice(0,50) + '...' : val;
+      const hasBase64 = val.includes('data:image');
+      out('   ' + key + ': ' + val.length + ' chars' + (hasBase64 ? ' ⚠️ CONTIENT BASE64!' : ''), 
+          hasBase64 ? 'err' : 'warn');
+    } else {
+      out('   ' + key + ': (vide)', '');
+    }
+  }
+  
+  // 3. Test PRODUCTS array
+  out('\n3. Test PRODUCTS array...');
+  if (typeof PRODUCTS === 'undefined') {
+    out('❌ PRODUCTS non défini — data.js pas chargé?', 'err');
+  } else {
+    out('✅ PRODUCTS: ' + PRODUCTS.length + ' produits', PRODUCTS.length > 0 ? 'ok' : 'err');
+    if (PRODUCTS.length > 0) {
+      const p = PRODUCTS[0];
+      out('   Premier produit: id=' + p.id + ' (' + typeof p.id + ') name=' + p.name, 'warn');
+      out('   img src type: ' + (p.img?.startsWith('data:') ? '⚠️ BASE64' : p.img?.startsWith('http') ? '🌐 URL' : '📁 Local'), 
+          p.img?.startsWith('data:') ? 'err' : 'ok');
+    }
+  }
+  
+  // 4. Test openProduct
+  out('\n4. Test openProduct...');
+  if (typeof openProduct === 'undefined') {
+    out('❌ openProduct() non défini — modal.js pas chargé?', 'err');
+  } else {
+    out('✅ openProduct() existe', 'ok');
+    if (typeof PRODUCTS !== 'undefined' && PRODUCTS.length > 0) {
+      try {
+        const testId = PRODUCTS[0].id;
+        out('   Test avec id=' + testId + ' (type: ' + typeof testId + ')');
+        openProduct(testId);
+        const modal = document.getElementById('productModal');
+        const visible = modal && modal.style.display !== 'none';
+        out(visible ? '✅ Modal ouvert!' : '❌ Modal pas ouvert', visible ? 'ok' : 'err');
+      } catch(e) {
+        out('❌ openProduct crash: ' + e.message, 'err');
+        out('   Stack: ' + e.stack?.split('\n')[1], 'err');
+      }
+    }
+  }
+  
+  // 5. Test POLICY_CONTENT
+  out('\n5. Test POLICY_CONTENT...');
+  if (typeof POLICY_CONTENT === 'undefined') {
+    out('❌ POLICY_CONTENT non défini — data.js manquant?', 'err');
+  } else {
+    const keys = Object.keys(POLICY_CONTENT);
+    out('✅ POLICY_CONTENT keys: ' + keys.join(', '), 'ok');
+  }
+  
+  // 6. Test openPolicyModal
+  out('\n6. Test openPolicyModal (cookies)...');
+  if (typeof openPolicyModal === 'undefined') {
+    out('❌ openPolicyModal() non défini — modal.js pas chargé?', 'err');
+  } else {
+    try {
+      openPolicyModal('cookies');
+      const modal = document.getElementById('policyModal');
+      const visible = modal && modal.style.display !== 'none';
+      out(visible ? '✅ Policy Modal ouvert!' : '❌ Policy Modal pas ouvert', visible ? 'ok' : 'err');
+    } catch(e) {
+      out('❌ openPolicyModal crash: ' + e.message, 'err');
+    }
+  }
+  
+  out('\n=== DIAGNOSTIC TERMINÉ ===');
+}
+
+function testModal() {
+  if (typeof PRODUCTS === 'undefined' || PRODUCTS.length === 0) {
+    alert('PRODUCTS vide! Clique "Tout tester" d\'abord');
+    return;
+  }
+  try {
+    openProduct(PRODUCTS[0].id);
+    const m = document.getElementById('productModal');
+    m.style.display = 'flex';
+    out('Modal test: ' + PRODUCTS[0].name, 'ok');
+  } catch(e) {
+    out('Modal CRASH: ' + e.message, 'err');
+    alert('Erreur: ' + e.message);
+  }
+}
+
+function testCookies() {
+  try {
+    openPolicyModal('cookies');
+    const m = document.getElementById('policyModal');
+    m.style.display = 'flex';
+    out('Policy modal ouvert', 'ok');
+  } catch(e) {
+    out('Policy CRASH: ' + e.message, 'err');
+    alert('Erreur: ' + e.message);
+  }
+}
+</script>
+
+<!-- Load all JS modules (same as boutique.html) -->
+<script src="js/i18n.js"></script>
+<script src="js/data.js"></script>
+<script src="js/router.js"></script>
+<script src="js/products.js"></script>
+<script src="js/modal.js"></script>
+<script src="js/cart.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/analytics.js"></script>
+<script>
+// Auto-run after load
+window.addEventListener('DOMContentLoaded', async () => {
+  await loadData();
+  out('✅ loadData() terminé — ' + PRODUCTS.length + ' produits chargés', 'ok');
+  runAll();
+});
+</script>
+
+</body>
+</html>
