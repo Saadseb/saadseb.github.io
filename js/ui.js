@@ -140,27 +140,25 @@ function toast(msg, icon='✅') {
 
 /* ═══════════ ADS CONFIG ═══════════ */
 function applyAdsConfig() {
-  // Zones publicitaires — ne jamais ecraser leur contenu
-  const adsterraZones = ['ad-home_top', 'ad-between_products', 'ad-blog_top', 'ad-blog_bottom'];
   const zones = {
-    'ad-home_top': ADS_CONFIG.home_top,
-    'ad-between_products': ADS_CONFIG.between_products,
-    'ad-footer': ADS_CONFIG.footer,
-    'ad-blog_top': ADS_CONFIG.blog_top,
-    'ad-blog_bottom': ADS_CONFIG.blog_bottom,
+    'ad-home_top':          ADS_CONFIG.home_top,
+    'ad-between_products':  ADS_CONFIG.between_products,
+    'ad-footer':            ADS_CONFIG.footer,
+    'ad-blog_top':          ADS_CONFIG.blog_top,
+    'ad-blog_bottom':       ADS_CONFIG.blog_bottom,
   };
   const pubId = ADS_CONFIG.adsenseId || ADS_DEFAULTS.adsenseId;
+  // Only inject if AdSense script is present
+  const adsenseReady = !!document.querySelector('script[src*="adsbygoogle"]');
+
   Object.entries(zones).forEach(([id, active]) => {
     const el = document.getElementById(id);
-    if(!el) return;
-    if(adsterraZones.includes(id)) {
-      el.classList.toggle('hidden', !active);
-      return;
-    }
+    if (!el) return;
     el.classList.toggle('hidden', !active);
-    if(active && pubId && !el.querySelector('.adsbygoogle')) {
+    if (active && pubId && adsenseReady && !el.querySelector('.adsbygoogle')) {
+      // Clear any legacy Adsterra or placeholder content
       el.innerHTML = '<ins class="adsbygoogle" style="display:block;width:100%;min-height:90px" data-ad-client="' + pubId + '" data-ad-format="auto" data-full-width-responsive="true"></ins>';
-      try { (adsbygoogle = window.adsbygoogle || []).push({}); } catch(e){}
+      try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch(e) { console.warn('AdSense push error:', e); }
     }
   });
 }
