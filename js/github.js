@@ -76,6 +76,37 @@ async function fetchBinaryAsBase64(localPath) {
   });
 }
 
+// ── Convert image src to GitHub URL ───────────────────────────────────────
+// Handles: local path, already-GitHub URL, base64 (saves as file first)
+async function resolveImageUrl(src, token, ghPath, log) {
+  if (!src) return src;
+
+  // Already a GitHub raw URL → keep
+  if (src.startsWith('https://raw.githubusercontent.com')) return src;
+
+  // External URL (Amazon, etc.) → keep as-is
+  if (src.startsWith('http')) return src;
+
+  // Base64 image → upload to GitHub as file, return URL
+  if (src.startsWith('data:image/')) {
+    try {
+      const ext  = src.match(/data:image\/(\w+);/)?.[1] || 'jpg';
+      const b64  = src.split(',')[1];
+      const sha  = await ghGetSha(token, ghPath);
+      await ghPutFile(token, ghPath, b64, sha, `img: ${ghPath}`);
+      const url  = `${GH_RAW}/${ghPath}`;
+      if (log) log('✅', `base64 → ${ghPath}`, `${Math.round(b64.length*0.75/1024)} KB`, true);
+      return url;
+    } catch(e) {
+      if (log) log('⚠️', `base64 upload échoué: ${ghPath}`, e.message, null);
+      return src; // fallback: keep base64
+    }
+  }
+
+  // Local path → GitHub raw URL
+  return `${GH_RAW}/${src}`;
+}
+
 // ── Main publish ───────────────────────────────────────────────────────────
 async function publishToGitHub() {
   const token    = localStorage.getItem(GH_TOKEN_KEY);
@@ -99,9 +130,7 @@ async function publishToGitHub() {
     }
   }
 
-  function setStatus(msg) {
-    if (statusEl) statusEl.textContent = msg;
-  }
+  function setStatus(msg) { if (statusEl) statusEl.textContent = msg; }
 
   if (!token) {
     toast('❌ Token GitHub manquant');
@@ -114,53 +143,64 @@ async function publishToGitHub() {
 
   try {
 
-    // ── ÉTAPE 1 : Sauvegarder data.json localement ─────────────────
+    // ── ÉTAPE 1 : Sauvegarder data.json localement ──────────────────
     setStatus('⏳ 1/4 — Sauvegarde locale...');
     await saveDataJson();
     log('✅', 'data.json sauvegardé localement', '', true);
 
-    // ── ÉTAPE 2 : Récupérer la liste complète des fichiers ──────────
+    // ── ÉTAPE 2 : Récupérer la liste des fichiers ────────────────────
     setStatus('⏳ 2/4 — Lecture des fichiers...');
     const listRes = await fetch('/file-list');
     if (!listRes.ok) throw new Error('Impossible de lire /file-list — server.py en marche ?');
     const { files } = await listRes.json();
-    log('📁', 'Fichiers détectés', `${files.length} fichiers à publier`, null);
+    log('📁', 'Fichiers détectés', `${files.length} fichiers`, null);
 
-    // ── ÉTAPE 3 : Construire data.json avec URLs GitHub ─────────────
-    setStatus('⏳ 3/4 — Préparation data.json...');
+    // ── ÉTAPE 3 : Résoudre les images base64 → GitHub ────────────────
+    setStatus('⏳ 3/4 — Traitement des images...');
 
-    function toGhUrl(localPath) {
-      if (!localPath || localPath.startsWith('http')) return localPath;
-      return `${GH_RAW}/${localPath}`;
+    // Process products: upload base64 images and get GitHub URLs
+    const resolvedProducts = await Promise.all(PRODUCTS.map(async (p, i) => {
+      const slug     = (p.name || `product-${p.id}`).toLowerCase()
+                         .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      const imgPath  = p.img?.startsWith('data:') ? `images/products/${slug}.jpg` : p.img;
+      const resolvedImg = await resolveImageUrl(p.img, token, imgPath, log);
+
+      const resolvedImages = await Promise.all((p.images || [p.img]).map(async (src, j) => {
+        const imgPathN = src?.startsWith('data:')
+          ? `images/products/${slug}-${j+1}.jpg`
+          : src;
+        return resolveImageUrl(src, token, imgPathN, log);
+      }));
+
+      return { ...p, img: resolvedImg, images: resolvedImages };
+    }));
+
+    // Process blog posts
+    const resolvedBlog = await Promise.all(BLOG_POSTS.map(async (b) => {
+      const slug    = (b.title || `post-${b.id}`).toLowerCase()
+                        .replace(/[^a-z0-9]+/g, '-').slice(0, 50);
+      const imgPath = b.img?.startsWith('data:') ? `images/blog/${slug}.jpg` : b.img;
+      const resolvedImg = await resolveImageUrl(b.img, token, imgPath, log);
+      return { ...b, img: resolvedImg };
+    }));
+
+    // Resolve backgrounds
+    const resolvedBg = {};
+    for (const [k, v] of Object.entries(BACKGROUNDS || {})) {
+      resolvedBg[k] = await resolveImageUrl(v, token, `images/backgrounds/${k}.jpg`, log);
     }
 
-    const dataForGh = {
-      products: PRODUCTS.map(p => ({
-        ...p,
-        img:    toGhUrl(p.img),
-        images: (p.images || []).map(toGhUrl),
-      })),
-      blog: BLOG_POSTS.map(b => ({ ...b, img: toGhUrl(b.img) })),
-      affiliates: AFFILIATE_PRODUCTS,
-      backgrounds: Object.fromEntries(
-        Object.entries(BACKGROUNDS || {}).map(([k, v]) => [k, toGhUrl(v)])
-      ),
-      config: {
-        version: '2.0.0',
-        last_updated: new Date().toISOString().split('T')[0],
-        hosted_on: 'github_pages'
-      }
-    };
+    log('✅', 'Images traitées', `${resolvedProducts.length} produits, ${resolvedBlog.length} articles`, true);
 
-    // ── ÉTAPE 4 : Uploader tous les fichiers ────────────────────────
+    // ── ÉTAPE 4 : Uploader tous les fichiers ─────────────────────────
     setStatus('⏳ 4/4 — Upload en cours...');
     let ok = 0, fail = 0;
-    const total = files.length + 1; // +1 for data.json
+    const total = files.length + 1;
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const pct  = Math.round((i / total) * 100);
-      setStatus(`⏳ Upload ${pct}% — ${file.path.split('/').pop()}`);
+      setStatus(`⏳ ${pct}% — ${file.path.split('/').pop()}`);
 
       try {
         let b64;
@@ -169,36 +209,42 @@ async function publishToGitHub() {
         } else {
           const r = await fetch(file.path + '?t=' + Date.now());
           if (!r.ok) throw new Error(`fetch ${r.status}`);
-          const text = await r.text();
-          b64 = toBase64Text(text);
+          b64 = toBase64Text(await r.text());
         }
-
         const sha = await ghGetSha(token, file.path);
         await ghPutFile(token, file.path, b64, sha, `deploy: ${file.path}`);
         ok++;
-
-        const size = Math.round(b64.length * 0.75 / 1024);
-        log('✅', file.path, `${size} KB`, true);
-
+        log('✅', file.path, `${Math.round(b64.length*0.75/1024)} KB`, true);
       } catch(e) {
         fail++;
         log('❌', file.path, e.message, false);
       }
     }
 
-    // Upload data.json with GitHub URLs
+    // Upload data.json with resolved GitHub URLs (no base64 in URLs)
     try {
+      const dataForGh = {
+        products:    resolvedProducts,
+        blog:        resolvedBlog,
+        affiliates:  AFFILIATE_PRODUCTS,
+        backgrounds: resolvedBg,
+        config: {
+          version:      '2.0.0',
+          last_updated: new Date().toISOString().split('T')[0],
+          hosted_on:    'github_pages'
+        }
+      };
       const dataB64 = toBase64Text(JSON.stringify(dataForGh, null, 2));
       const dataSha = await ghGetSha(token, 'data.json');
       await ghPutFile(token, 'data.json', dataB64, dataSha, 'data: GitHub URLs');
       ok++;
-      log('✅', 'data.json', 'URLs GitHub injectées', true);
+      log('✅', 'data.json', 'URLs GitHub propres ✅', true);
     } catch(e) {
       fail++;
       log('❌', 'data.json', e.message, false);
     }
 
-    // ── Résultat ────────────────────────────────────────────────────
+    // ── Résultat ─────────────────────────────────────────────────────
     const siteUrl = `https://${GH_USER}.github.io`;
     if (fail === 0) {
       log('🎉', 'Publication réussie !', `${ok}/${total} fichiers`, true);
@@ -207,7 +253,7 @@ async function publishToGitHub() {
       toast('🎉 Site publié sur GitHub Pages !');
     } else {
       log('⚠️', 'Publication partielle', `✅${ok} ❌${fail}`, null);
-      setStatus(`⚠️ ${fail} erreurs — ${ok} fichiers publiés`);
+      setStatus(`⚠️ ${fail} erreurs — ${ok} publiés`);
       toast(`⚠️ ${fail} fichiers en erreur`);
     }
 
