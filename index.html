@@ -1702,6 +1702,16 @@ body.nav-scrolled #promoBanner { top:60px; }
   </div>
 </nav>
 
+<div class="mobile-menu" id="mobileMenu">
+  <a href="index.html">Accueil</a>
+  <a href="boutique.html">Boutique</a>
+  <a href="blog.html">Blog</a>
+  <a href="suivi.html">Suivi</a>
+  <a href="atelier.html">Atelier</a>
+  <a href="contact.html">Contact</a>
+  <a href="affiliation.html">🔗 Affiliation</a>
+</div>
+
 <div class="page active" id="page-home">
   <!-- HERO with tanneries background -->
   <div class="hero">
@@ -1719,8 +1729,8 @@ body.nav-scrolled #promoBanner { top:60px; }
       </h1>
       <div class="hero-arabic">كل قفطان حكاية من ذهب</div>
       <div class="hero-btns">
-        <span class="btn-hero btn-primary" onclick="showPage('shop')" data-i18n="hero_cta1">Découvrir la Collection</span>
-        <span class="btn-hero btn-secondary" onclick="showPage('suivi')" data-i18n="hero_cta2">Suivre ma Commande</span>
+        <a class="btn-hero btn-primary" href="boutique.html" data-i18n="hero_cta1" style="text-decoration:none">Découvrir la Collection</a>
+        <a class="btn-hero btn-secondary" href="suivi.html" data-i18n="hero_cta2" style="text-decoration:none">Suivre ma Commande</a>
       </div>
     </div>
     <div class="hero-scroll">
@@ -1752,7 +1762,7 @@ body.nav-scrolled #promoBanner { top:60px; }
       </div>
       <div class="products-grid" id="featuredGrid"></div>
       <div style="text-align:center;margin-top:40px">
-        <span class="btn-hero btn-secondary" onclick="showPage('shop')">Voir toute la collection →</span>
+        <a class="btn-hero btn-secondary" href="boutique.html" style="text-decoration:none">Voir toute la collection →</a>
       </div>
     </section>
   </div>
@@ -1840,7 +1850,7 @@ body.nav-scrolled #promoBanner { top:60px; }
     </div>
     <div class="blog-grid" id="homeBlogGrid"></div>
     <div style="text-align:center;margin-top:40px">
-      <span class="btn-hero btn-secondary" onclick="showPage('blog')">Voir tous les articles →</span>
+      <a class="btn-hero btn-secondary" href="blog.html" style="text-decoration:none">Voir tous les articles →</a>
     </div>
   </section>
 
@@ -2100,11 +2110,11 @@ body.nav-scrolled #promoBanner { top:60px; }
   <!-- ═══ FaizaCaftan JS Modules ═══ -->
   <script src="js/i18n.js"></script>
   <script src="js/data.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/nav.js"></script>
   <script src="js/router.js"></script>
   <script src="js/products.js"></script>
   <script src="js/modal.js"></script>
   <script src="js/cart.js"></script>
-  <script src="js/ui.js"></script>
   <script src="js/analytics.js"></script>
-  <script src="js/nav.js"></script>
 </html>
